@@ -21,7 +21,8 @@ type Selector struct {
 	Name string
 	Type string
 
-	LOC int
+	LOC   int
+	Depth int
 }
 
 func main() {
@@ -76,7 +77,8 @@ func main() {
 					node := w.FindFnNode(dp.Pkg, x.Sel.Name)
 					if node != nil {
 						lines := w.Lines(node)
-						sel.LOC = lines
+						_, depth := w.WalkExternal(node, dp.Pkg)
+						sel.LOC, sel.Depth = lines, depth
 					}
 				}
 				selectors[name] = sel
@@ -88,13 +90,14 @@ func main() {
 
 	// Print stats
 	table := tablewriter.NewWriter(os.Stdout)
-	table.SetHeader([]string{"Name", "LOC", "Type", "Count"})
+	table.SetHeader([]string{"Name", "LOC", "Type", "Count", "Depth"})
 	var results [][]string
 	for name, count := range counter {
 		sel := selectors[name]
 		loc := fmt.Sprintf("%d", sel.LOC)
+		depth := fmt.Sprintf("%d", sel.Depth)
 		count := fmt.Sprintf("%d", count)
-		results = append(results, []string{name, loc, sel.Type, count})
+		results = append(results, []string{name, loc, sel.Type, count, depth})
 	}
 	sort.Sort(ByName(results))
 	for _, v := range results {
@@ -170,41 +173,44 @@ func NewWalker(p *loader.Program) *Walker {
 
 // WalkExternal walks through function body block,
 // looking for external dependencies expressions.
-func (w *Walker) WalkExternal(node ast.Node) {
+func (w *Walker) WalkExternal(node ast.Node, parent *types.Package) (lines, depth int) {
 	ast.Inspect(node, func(n ast.Node) bool {
 		switch x := n.(type) {
 		case *ast.SelectorExpr:
 			n := pkgName(x)
-
-			// if it's not a selector for external package, skip it
-			pkg, ok := w.Packages[n]
-			if !ok {
-				break
+			pkg := w.FindImport(parent, n)
+			if pkg == nil {
+				return true
 			}
 
 			name := x.Sel.Name
 
 			// lookup this object in package
-			obj := w.FindObject(&pkg, name)
+			obj := w.FindObject(pkg, name)
 			if obj == nil {
 				return true
 			}
 
 			if _, ok := obj.Type().(*types.Signature); ok {
-				dp := w.P.Package(pkg.Path)
-				node := w.FindFnNode(dp.Pkg, name)
+				depth++
 
-				lines := w.Lines(node)
-				_ = lines
+				node := w.FindFnNode(pkg, name)
+
+				if node != nil {
+					//lines = w.Lines(node)
+					lines1, depth1 := w.WalkExternal(node, pkg)
+					lines = lines1
+					depth += depth1
+				}
 			}
 		}
 		return true
 	})
+	return
 }
 
-func (w *Walker) FindObject(pkg *Package, name string) types.Object {
-	dp := w.P.Package(pkg.Path)
-	scope := dp.Pkg.Scope()
+func (w *Walker) FindObject(pkg *types.Package, name string) types.Object {
+	scope := pkg.Scope()
 	return scope.Lookup(name)
 }
 
@@ -231,6 +237,15 @@ func (w *Walker) FindFnNode(pkg *types.Package, fnName string) ast.Node {
 		})
 		if node != nil {
 			return node
+		}
+	}
+	return nil
+}
+
+func (w *Walker) FindImport(parent *types.Package, name string) *types.Package {
+	for _, p := range parent.Imports() {
+		if p.Name() == name {
+			return p
 		}
 	}
 	return nil
