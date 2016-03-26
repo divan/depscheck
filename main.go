@@ -21,8 +21,8 @@ type Selector struct {
 	Name string
 	Type string
 
-	LOC   int
-	Depth int
+	LOC, LOCCum          int
+	Depth, DepthInternal int
 }
 
 func main() {
@@ -77,8 +77,9 @@ func main() {
 					node := w.FindFnNode(dp.Pkg, x.Sel.Name)
 					if node != nil {
 						lines := w.Lines(node)
-						_, depth := w.WalkExternal(node, dp.Pkg)
+						_, depth, linesCum, depthInt := w.WalkExternal(node, dp.Pkg)
 						sel.LOC, sel.Depth = lines, depth
+						sel.LOCCum, sel.DepthInternal = linesCum, depthInt
 					}
 				}
 				selectors[name] = sel
@@ -90,14 +91,16 @@ func main() {
 
 	// Print stats
 	table := tablewriter.NewWriter(os.Stdout)
-	table.SetHeader([]string{"Name", "LOC", "Type", "Count", "Depth"})
+	table.SetHeader([]string{"Name", "LOC", "Type", "Count", "Depth", "LOCCum", "DepthInt"})
 	var results [][]string
 	for name, count := range counter {
 		sel := selectors[name]
 		loc := fmt.Sprintf("%d", sel.LOC)
 		depth := fmt.Sprintf("%d", sel.Depth)
+		locCum := fmt.Sprintf("%d", sel.LOCCum)
+		depthInt := fmt.Sprintf("%d", sel.DepthInternal)
 		count := fmt.Sprintf("%d", count)
-		results = append(results, []string{name, loc, sel.Type, count, depth})
+		results = append(results, []string{name, loc, sel.Type, count, depth, locCum, depthInt})
 	}
 	sort.Sort(ByName(results))
 	for _, v := range results {
@@ -173,9 +176,38 @@ func NewWalker(p *loader.Program) *Walker {
 
 // WalkExternal walks through function body block,
 // looking for external dependencies expressions.
-func (w *Walker) WalkExternal(node ast.Node, parent *types.Package) (lines, depth int) {
+func (w *Walker) WalkExternal(node ast.Node, parent *types.Package) (lines, depth, locCum, depthInt int) {
 	ast.Inspect(node, func(n ast.Node) bool {
 		switch x := n.(type) {
+		case *ast.CallExpr:
+			expr, ok := x.Fun.(*ast.Ident)
+			if !ok {
+				break
+			}
+			name := expr.Name
+
+			// lookup this object in package
+			obj := w.FindObject(parent, name)
+			if obj == nil {
+				return true
+			}
+
+			if _, ok := obj.Type().(*types.Signature); ok {
+				depthInt++
+
+				node := w.FindFnNode(parent, name)
+
+				if node != nil {
+					loc := w.Lines(node)
+					locCum += loc
+
+					lines1, depth1, lines2, depth2 := w.WalkExternal(node, parent)
+					lines = lines1
+					depth += depth1
+					locCum += lines2
+					depthInt += depth2
+				}
+			}
 		case *ast.SelectorExpr:
 			n := pkgName(x)
 			pkg := w.FindImport(parent, n)
@@ -197,16 +229,30 @@ func (w *Walker) WalkExternal(node ast.Node, parent *types.Package) (lines, dept
 				node := w.FindFnNode(pkg, name)
 
 				if node != nil {
-					//lines = w.Lines(node)
-					lines1, depth1 := w.WalkExternal(node, pkg)
+					lines1, depth1, lines2, depth2 := w.WalkExternal(node, pkg)
 					lines = lines1
 					depth += depth1
+					locCum += lines2
+					depthInt += depth2
 				}
 			}
 		}
 		return true
 	})
 	return
+}
+
+// WalkInternal walks through function body block,
+// looking for internal functions calls.
+func (w *Walker) WalkInternal(node ast.Node, parent *types.Package) (lines, depth int) {
+	ast.Inspect(node, func(n ast.Node) bool {
+		switch x := n.(type) {
+		case *ast.CallExpr:
+			fmt.Println("DD", x)
+		}
+		return true
+	})
+	return 0, 0
 }
 
 func (w *Walker) FindObject(pkg *types.Package, name string) types.Object {
@@ -216,18 +262,19 @@ func (w *Walker) FindObject(pkg *types.Package, name string) types.Object {
 
 func (w *Walker) FindFnNode(pkg *types.Package, fnName string) ast.Node {
 	var node ast.Node
-	for k, _ := range w.P.AllPackages[pkg].Scopes {
+	for k := range w.P.AllPackages[pkg].Scopes {
 		// skip non-file scopes
 		if _, ok := k.(*ast.File); !ok {
 			continue
 		}
+
 		// inspect package top-level node to find func decls
 		ast.Inspect(k, func(n ast.Node) bool {
 			switch x := n.(type) {
 			case *ast.FuncDecl:
 				if x.Name.Name == fnName {
 					if x.Body == nil {
-						break
+						return false
 					}
 					node = n
 					return false
@@ -235,9 +282,7 @@ func (w *Walker) FindFnNode(pkg *types.Package, fnName string) ast.Node {
 			}
 			return true
 		})
-		if node != nil {
-			return node
-		}
+		return node
 	}
 	return nil
 }
