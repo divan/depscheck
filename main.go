@@ -67,17 +67,16 @@ func main() {
 				dp := p.Package(pkg.Path)
 				scope := dp.Pkg.Scope()
 				obj := scope.Lookup(x.Sel.Name)
-
 				if obj == nil {
 					return true
 				}
 				if _, ok := obj.Type().(*types.Signature); ok {
 					sel.Type = "func"
 
-					node := w.FindFnNode(dp.Pkg, x.Sel.Name)
+					node := w.FindFnNode(dp, x.Sel.Name)
 					if node != nil {
 						lines := w.Lines(node)
-						_, depth, linesCum, depthInt := w.WalkExternal(node, dp.Pkg)
+						_, depth, linesCum, depthInt := w.WalkExternal(node, dp)
 						sel.LOC, sel.Depth = lines, depth
 						sel.LOCCum, sel.DepthInternal = linesCum, depthInt
 					}
@@ -176,7 +175,7 @@ func NewWalker(p *loader.Program) *Walker {
 
 // WalkExternal walks through function body block,
 // looking for external dependencies expressions.
-func (w *Walker) WalkExternal(node ast.Node, parent *types.Package) (lines, depth, locCum, depthInt int) {
+func (w *Walker) WalkExternal(node ast.Node, parent *loader.PackageInfo) (lines, depth, locCum, depthInt int) {
 	ast.Inspect(node, func(n ast.Node) bool {
 		switch x := n.(type) {
 		case *ast.CallExpr:
@@ -193,11 +192,10 @@ func (w *Walker) WalkExternal(node ast.Node, parent *types.Package) (lines, dept
 			}
 
 			if _, ok := obj.Type().(*types.Signature); ok {
-				depthInt++
-
 				node := w.FindFnNode(parent, name)
 
 				if node != nil {
+					depthInt++
 					loc := w.Lines(node)
 					locCum += loc
 
@@ -224,11 +222,11 @@ func (w *Walker) WalkExternal(node ast.Node, parent *types.Package) (lines, dept
 			}
 
 			if _, ok := obj.Type().(*types.Signature); ok {
-				depth++
 
 				node := w.FindFnNode(pkg, name)
 
 				if node != nil {
+					depth++
 					lines1, depth1, lines2, depth2 := w.WalkExternal(node, pkg)
 					lines = lines1
 					depth += depth1
@@ -242,34 +240,15 @@ func (w *Walker) WalkExternal(node ast.Node, parent *types.Package) (lines, dept
 	return
 }
 
-// WalkInternal walks through function body block,
-// looking for internal functions calls.
-func (w *Walker) WalkInternal(node ast.Node, parent *types.Package) (lines, depth int) {
-	ast.Inspect(node, func(n ast.Node) bool {
-		switch x := n.(type) {
-		case *ast.CallExpr:
-			fmt.Println("DD", x)
-		}
-		return true
-	})
-	return 0, 0
-}
-
-func (w *Walker) FindObject(pkg *types.Package, name string) types.Object {
-	scope := pkg.Scope()
+func (w *Walker) FindObject(pkg *loader.PackageInfo, name string) types.Object {
+	scope := pkg.Pkg.Scope()
 	return scope.Lookup(name)
 }
 
-func (w *Walker) FindFnNode(pkg *types.Package, fnName string) ast.Node {
+func (w *Walker) FindFnNode(pkg *loader.PackageInfo, fnName string) ast.Node {
 	var node ast.Node
-	for k := range w.P.AllPackages[pkg].Scopes {
-		// skip non-file scopes
-		if _, ok := k.(*ast.File); !ok {
-			continue
-		}
-
-		// inspect package top-level node to find func decls
-		ast.Inspect(k, func(n ast.Node) bool {
+	for _, f := range pkg.Files {
+		ast.Inspect(f, func(n ast.Node) bool {
 			switch x := n.(type) {
 			case *ast.FuncDecl:
 				if x.Name.Name == fnName {
@@ -282,15 +261,17 @@ func (w *Walker) FindFnNode(pkg *types.Package, fnName string) ast.Node {
 			}
 			return true
 		})
-		return node
+		if node != nil {
+			return node
+		}
 	}
 	return nil
 }
 
-func (w *Walker) FindImport(parent *types.Package, name string) *types.Package {
-	for _, p := range parent.Imports() {
+func (w *Walker) FindImport(parent *loader.PackageInfo, name string) *loader.PackageInfo {
+	for _, p := range parent.Pkg.Imports() {
 		if p.Name() == name {
-			return p
+			return w.P.Package(p.Path())
 		}
 	}
 	return nil
