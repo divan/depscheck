@@ -34,18 +34,11 @@ func main() {
 		return
 	}
 
+	w := NewWalker(p)
+
 	// work only with top package for now.
 	// TODO: work with all recursive sub-packages (optionally?)
 	top := p.InitialPackages()[0]
-
-	// prepare map of resolved imports
-	packages := make(map[string]Package)
-	for _, pkg := range top.Pkg.Imports() {
-		packages[pkg.Name()] = Package{
-			Name: pkg.Name(),
-			Path: pkg.Path(),
-		}
-	}
 
 	// find all selectors ('f.x') for imported packages
 	selectors := make(map[string]Selector)
@@ -54,20 +47,18 @@ func main() {
 		ast.Inspect(f, func(n ast.Node) bool {
 			switch x := n.(type) {
 			case *ast.SelectorExpr:
-				n, ok := x.X.(*ast.Ident)
-				if !ok {
-					break
-				}
-				pkgName := n.Name
+				n := pkgName(x)
 
-				// it's not a selector for external package, skip it
-				pkg, ok := packages[pkgName]
+				// if it's not a selector for external package, skip it
+				pkg, ok := w.Packages[n]
 				if !ok {
 					break
 				}
+
+				name := fmt.Sprintf("%s.%s", n, x.Sel.Name)
 
 				sel := Selector{
-					Pkg:  packages[pkgName],
+					Pkg:  w.Packages[n],
 					Name: x.Sel.Name,
 				}
 
@@ -76,17 +67,18 @@ func main() {
 				scope := dp.Pkg.Scope()
 				obj := scope.Lookup(x.Sel.Name)
 
-				if obj != nil {
-					if _, ok := obj.Type().(*types.Signature); ok {
-						sel.Type = "func"
+				if obj == nil {
+					return true
+				}
+				if _, ok := obj.Type().(*types.Signature); ok {
+					sel.Type = "func"
 
-						lines := Lines(p, dp.Pkg, x.Sel.Name)
+					node := w.FindFnNode(dp.Pkg, x.Sel.Name)
+					if node != nil {
+						lines := w.Lines(node)
 						sel.LOC = lines
 					}
 				}
-
-				name := fmt.Sprintf("%s.%s", pkgName, x.Sel.Name)
-
 				selectors[name] = sel
 				counter[name]++
 			}
@@ -111,35 +103,26 @@ func main() {
 	table.Render() // Send output
 }
 
-func Lines(p *loader.Program, pkg *types.Package, name string) int {
+func (w *Walker) Lines(node ast.Node) int {
 	var lines int
-	for k, _ := range p.AllPackages[pkg].Scopes {
-		// skip non-file scopes
-		if _, ok := k.(*ast.File); !ok {
-			continue
-		}
-		// inspect package top-level node to find func decls
-		ast.Inspect(k, func(n ast.Node) bool {
-			switch x := n.(type) {
-			case *ast.FuncDecl:
-				if x.Name.Name == name {
-					if x.Body == nil {
-						break
-					}
-					start := p.Fset.Position(x.Body.Lbrace)
-					end := p.Fset.Position(x.Body.Rbrace)
-					lines = end.Line - start.Line
-					if lines == 0 {
-						lines = 1
-					}
-					return false
-				}
+	ast.Inspect(node, func(n ast.Node) bool {
+		switch x := n.(type) {
+		case *ast.FuncDecl:
+			if x.Body == nil {
+				break
 			}
-			return true
-		})
-		if lines != 0 {
-			return lines
+			start := w.P.Fset.Position(x.Body.Lbrace)
+			end := w.P.Fset.Position(x.Body.Rbrace)
+			lines = end.Line - start.Line
+			if lines == 0 {
+				lines = 1
+			}
+			return false
 		}
+		return true
+	})
+	if lines != 0 {
+		return lines
 	}
 	return 0
 }
@@ -149,3 +132,106 @@ type ByName [][]string
 func (b ByName) Len() int           { return len(b) }
 func (b ByName) Swap(i, j int)      { b[i], b[j] = b[j], b[i] }
 func (b ByName) Less(i, j int) bool { return b[i][0] < b[j][0] }
+
+// pkgName returns qualified package name from SelectorExpr.
+func pkgName(x *ast.SelectorExpr) string {
+	n, ok := x.X.(*ast.Ident)
+	if !ok {
+		return ""
+	}
+
+	return n.Name
+}
+
+type Walker struct {
+	P        *loader.Program
+	Packages map[string]Package
+}
+
+func NewWalker(p *loader.Program) *Walker {
+	// work only with top package for now.
+	// TODO: work with all recursive sub-packages (optionally?)
+	top := p.InitialPackages()[0]
+
+	// prepare map of resolved imports
+	packages := make(map[string]Package)
+	for _, pkg := range top.Pkg.Imports() {
+		packages[pkg.Name()] = Package{
+			Name: pkg.Name(),
+			Path: pkg.Path(),
+		}
+	}
+
+	return &Walker{
+		P:        p,
+		Packages: packages,
+	}
+}
+
+// WalkExternal walks through function body block,
+// looking for external dependencies expressions.
+func (w *Walker) WalkExternal(node ast.Node) {
+	ast.Inspect(node, func(n ast.Node) bool {
+		switch x := n.(type) {
+		case *ast.SelectorExpr:
+			n := pkgName(x)
+
+			// if it's not a selector for external package, skip it
+			pkg, ok := w.Packages[n]
+			if !ok {
+				break
+			}
+
+			name := x.Sel.Name
+
+			// lookup this object in package
+			obj := w.FindObject(&pkg, name)
+			if obj == nil {
+				return true
+			}
+
+			if _, ok := obj.Type().(*types.Signature); ok {
+				dp := w.P.Package(pkg.Path)
+				node := w.FindFnNode(dp.Pkg, name)
+
+				lines := w.Lines(node)
+				_ = lines
+			}
+		}
+		return true
+	})
+}
+
+func (w *Walker) FindObject(pkg *Package, name string) types.Object {
+	dp := w.P.Package(pkg.Path)
+	scope := dp.Pkg.Scope()
+	return scope.Lookup(name)
+}
+
+func (w *Walker) FindFnNode(pkg *types.Package, fnName string) ast.Node {
+	var node ast.Node
+	for k, _ := range w.P.AllPackages[pkg].Scopes {
+		// skip non-file scopes
+		if _, ok := k.(*ast.File); !ok {
+			continue
+		}
+		// inspect package top-level node to find func decls
+		ast.Inspect(k, func(n ast.Node) bool {
+			switch x := n.(type) {
+			case *ast.FuncDecl:
+				if x.Name.Name == fnName {
+					if x.Body == nil {
+						break
+					}
+					node = n
+					return false
+				}
+			}
+			return true
+		})
+		if node != nil {
+			return node
+		}
+	}
+	return nil
+}
