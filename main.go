@@ -21,17 +21,12 @@ func main() {
 
 	w := NewWalker(p)
 
-	// work only with top package for now.
-	// TODO: work with all recursive sub-packages (optionally?)
-	topPkg := p.InitialPackages()[0]
-
-	for _, pkg := p.InitialPackages() {
-	for _, f := range topPkg.Files {
-		w.Walk(f, topPkg, true)
+	for _, pkg := range p.InitialPackages() {
+		for _, file := range pkg.Files {
+			w.Walk(file, pkg, true)
+		}
 	}
-}
 
-	// Print stats
 	w.PrintPretty()
 }
 
