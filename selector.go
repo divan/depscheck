@@ -4,12 +4,6 @@ import (
 	"fmt"
 )
 
-// Package represents package info, needed for this tool.
-type Package struct {
-	Name string
-	Path string
-}
-
 // Selector represents Go language selector (x.f),
 // which may be:
 // - method of variable of external package

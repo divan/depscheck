@@ -21,20 +21,16 @@ type Walker struct {
 	Selectors []*Selector
 }
 
+// NewWalker inits new AST walker.
 func NewWalker(p *loader.Program) *Walker {
-	// work only with top package for now.
-	// TODO: work with all recursive sub-packages (optionally?)
-	top := p.InitialPackages()[0]
-
-	// prepare map of resolved imports
 	packages := make(map[string]Package)
-	for _, pkg := range top.Pkg.Imports() {
-		if IsStdlib(pkg.Path()) {
-			continue
-		}
-		packages[pkg.Name()] = Package{
-			Name: pkg.Name(),
-			Path: pkg.Path(),
+	for _, pkg := range p.InitialPackages() {
+		// prepare map of resolved imports
+		for _, i := range pkg.Pkg.Imports() {
+			if IsStdlib(i.Path()) {
+				continue
+			}
+			packages[i.Name()] = NewPackage(i.Name(), i.Path())
 		}
 	}
 
