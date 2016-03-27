@@ -49,19 +49,22 @@ func NewWalker(p *loader.Program) *Walker {
 	}
 }
 
-// Walk walks through function body block,
+// Walk walks through function body block (node),
 // looking for internal and external dependencies expressions.
-func (w *Walker) Walk(topNode ast.Node, parent *loader.PackageInfo, top bool) *Selector {
+//
+// 'top' means that it's top-level walk, which must be handled a bit
+// differently.
+func (w *Walker) Walk(node ast.Node, pkg *loader.PackageInfo, top bool) *Selector {
 	var sel *Selector
-	ast.Inspect(topNode, func(n ast.Node) bool {
+	ast.Inspect(node, func(n ast.Node) bool {
 		if x, ok := n.(*ast.SelectorExpr); ok {
-			sel = w.WalkSelectorExpr(topNode, parent, x, top)
+			sel = w.WalkSelectorExpr(node, pkg, x, top)
 			return false
 		}
 
 		if !top {
 			if x, ok := n.(*ast.CallExpr); ok {
-				sel = w.WalkCallExpr(topNode, parent, x, top)
+				sel = w.WalkCallExpr(node, pkg, x, top)
 				if sel != nil {
 					sel.DepthInternal++
 				}
@@ -73,6 +76,8 @@ func (w *Walker) Walk(topNode ast.Node, parent *loader.PackageInfo, top bool) *S
 	return sel
 }
 
+// WalkCallExpr walks down through CallExpr AST-node. It may represent both
+// local and external dependency call, so handle both.
 func (w *Walker) WalkCallExpr(node ast.Node, pkg *loader.PackageInfo, expr *ast.CallExpr, top bool) *Selector {
 	var name string
 	switch expr := expr.Fun.(type) {
@@ -91,38 +96,36 @@ func (w *Walker) WalkCallExpr(node ast.Node, pkg *loader.PackageInfo, expr *ast.
 	return w.walkFunc(node, obj, pkg, name, true)
 }
 
-func (w *Walker) WalkSelectorExpr(node ast.Node, parent *loader.PackageInfo, expr *ast.SelectorExpr, top bool) *Selector {
+// WalkSelectorExpr walks throug SelecorExpr node.
+func (w *Walker) WalkSelectorExpr(node ast.Node, pkg *loader.PackageInfo, expr *ast.SelectorExpr, top bool) *Selector {
 	var (
-		n   string // package name
-		obj types.Object
+		pkgName string
+		obj     types.Object
 	)
 
 	// Look for Selections map first
-	s, ok := parent.Selections[expr]
+	s, ok := pkg.Selections[expr]
 	if ok {
 		// (pkg).pkgvar.Method()
 		obj = s.Obj()
 		if obj.Pkg() == nil {
 			return nil
 		}
-		n = obj.Pkg().Name()
+		pkgName = obj.Pkg().Name()
 	} else {
 		// pkg.Func()
-		n = pkgName(expr)
+		pkgName = packageName(expr)
 	}
 
-	var pkg *loader.PackageInfo
-	if n == parent.Pkg.Name() {
-		pkg = parent
-	} else {
-		pkg = w.FindImport(parent, n)
+	internal := (pkgName == pkg.Pkg.Name())
+	if !internal {
+		pkg = w.FindImport(pkg, pkgName)
 		if pkg == nil {
 			return nil
 		}
 	}
 
 	name := expr.Sel.Name
-	internal := (n == parent.Pkg.Name())
 
 	// lookup this object in package
 	if obj == nil {
@@ -250,8 +253,8 @@ func (w *Walker) LOC(node *ast.FuncDecl) int {
 	return lines
 }
 
-// pkgName returns qualified package name from SelectorExpr.
-func pkgName(x *ast.SelectorExpr) string {
+// packageName returns qualified package name from SelectorExpr.
+func packageName(x *ast.SelectorExpr) string {
 	n, ok := x.X.(*ast.Ident)
 	if !ok {
 		return ""
