@@ -10,7 +10,8 @@ import (
 func main() {
 	var conf loader.Config
 
-	conf.CreateFromFilenames(".", os.Args[1:]...)
+	//conf.CreateFromFilenames(".", os.Args[1:]...)
+	conf.FromArgs(os.Args[1:], false)
 	p, err := conf.Load()
 	if err != nil {
 		fmt.Println(err)
