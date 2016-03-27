@@ -11,20 +11,6 @@ import (
 	"golang.org/x/tools/go/loader"
 )
 
-type Package struct {
-	Name string
-	Path string
-}
-
-type Selector struct {
-	Pkg  Package
-	Name string
-	Type string
-
-	LOC, LOCCum          int
-	Depth, DepthInternal int
-}
-
 func main() {
 	var conf loader.Config
 
@@ -48,7 +34,21 @@ func main() {
 		ast.Inspect(f, func(n ast.Node) bool {
 			switch x := n.(type) {
 			case *ast.SelectorExpr:
-				n := pkgName(x)
+				var (
+					n   string // package name
+					obj types.Object
+				)
+
+				// handle methods
+				s, ok := top.Selections[x]
+				if ok {
+					// (pkg).pkgvar.Method()
+					obj = s.Obj()
+					n = s.Obj().Pkg().Name()
+				} else {
+					// pkg.Func()
+					n = pkgName(x)
+				}
 
 				// if it's not a selector for external package, skip it
 				pkg, ok := w.Packages[n]
@@ -56,19 +56,18 @@ func main() {
 					break
 				}
 
-				name := fmt.Sprintf("%s.%s", n, x.Sel.Name)
-
 				sel := Selector{
-					Pkg:  w.Packages[n],
+					Pkg:  pkg,
 					Name: x.Sel.Name,
 				}
 
 				// lookup this object in package
 				dp := p.Package(pkg.Path)
-				scope := dp.Pkg.Scope()
-				obj := scope.Lookup(x.Sel.Name)
 				if obj == nil {
-					return true
+					obj = w.FindObject(dp, sel.Name)
+					if obj == nil {
+						return true
+					}
 				}
 				if _, ok := obj.Type().(*types.Signature); ok {
 					sel.Type = "func"
@@ -81,8 +80,8 @@ func main() {
 						sel.LOCCum, sel.DepthInternal = linesCum, depthInt
 					}
 				}
-				selectors[name] = sel
-				counter[name]++
+				selectors[sel.Name] = sel
+				counter[sel.Name]++
 			}
 			return true
 		})
