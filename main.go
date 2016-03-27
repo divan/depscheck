@@ -2,11 +2,9 @@ package main
 
 import (
 	"fmt"
-	"github.com/olekukonko/tablewriter"
 	"go/ast"
 	"go/types"
 	"os"
-	"sort"
 
 	"golang.org/x/tools/go/loader"
 )
@@ -27,94 +25,15 @@ func main() {
 	// TODO: work with all recursive sub-packages (optionally?)
 	topPkg := p.InitialPackages()[0]
 
+	for _, pkg := p.InitialPackages() {
 	for _, f := range topPkg.Files {
 		w.Walk(f, topPkg, true)
-		/*
-			ast.Inspect(f, func(n ast.Node) bool {
-				switch x := n.(type) {
-				case *ast.SelectorExpr:
-					var (
-						n   string // package name
-						obj types.Object
-					)
-
-					// handle methods
-					s, ok := top.Selections[x]
-					if ok {
-						// (pkg).pkgvar.Method()
-						obj = s.Obj()
-						if obj.Pkg() == nil {
-							return false
-						}
-						n = s.Obj().Pkg().Name()
-					} else {
-						// pkg.Func()
-						n = pkgName(x)
-					}
-
-					// if it's not a selector for external package, skip it
-					pkgInfo, ok := w.Packages[n]
-					if !ok {
-						break
-					}
-
-					sel := Selector{
-						Pkg:  pkgInfo,
-						Name: x.Sel.Name,
-					}
-
-					// lookup this object in package
-					pkg := p.Package(pkgInfo.Path)
-					if obj == nil {
-						obj = w.FindObject(pkg, x.Sel.Name)
-						if obj == nil {
-							return true
-						}
-					}
-					if _, ok := obj.Type().(*types.Signature); ok {
-						sel.Type = "func"
-
-						node := w.FindFnNode(pkg, x.Sel.Name)
-						if node != nil {
-							lines := w.LOC(node)
-							_, depth, linesCum, depthInt := w.Walk(node, pkg, false)
-							sel.LOC, sel.Depth = lines, depth
-							sel.LOCCum, sel.DepthInternal = linesCum, depthInt
-						}
-					}
-					w.Selectors[sel.String()] = sel
-					w.Counter[sel.String()]++
-				}
-				return true
-			})
-		*/
 	}
-
-	// Print stats
-	table := tablewriter.NewWriter(os.Stdout)
-	table.SetHeader([]string{"Name", "Type", "Count", "LOC", "LOCCum", "Depth", "DepthInt"})
-	var results [][]string
-	for name, count := range w.Counter {
-		sel := w.SelectorsMap[name]
-		loc := fmt.Sprintf("%d", sel.LOC)
-		locCum := fmt.Sprintf("%d", sel.LOCCum)
-		depth := fmt.Sprintf("%d", sel.Depth-1)
-		depthInt := fmt.Sprintf("%d", sel.DepthInternal-1)
-		count := fmt.Sprintf("%d", count)
-		results = append(results, []string{name, sel.Type, count, loc, locCum, depth, depthInt})
-	}
-	sort.Sort(ByName(results))
-	for _, v := range results {
-		table.Append(v)
-	}
-	table.Render() // Send output
 }
 
-type ByName [][]string
-
-func (b ByName) Len() int           { return len(b) }
-func (b ByName) Swap(i, j int)      { b[i], b[j] = b[j], b[i] }
-func (b ByName) Less(i, j int) bool { return b[i][0] < b[j][0] }
+	// Print stats
+	w.PrintPretty()
+}
 
 // pkgName returns qualified package name from SelectorExpr.
 func pkgName(x *ast.SelectorExpr) string {
