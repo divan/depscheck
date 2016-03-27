@@ -7,26 +7,42 @@ import (
 	"sort"
 )
 
-type ByName [][]string
+type ByName []*Selector
 
-func (b ByName) Len() int           { return len(b) }
-func (b ByName) Swap(i, j int)      { b[i], b[j] = b[j], b[i] }
-func (b ByName) Less(i, j int) bool { return b[i][0] < b[j][0] }
+func (b ByName) Len() int      { return len(b) }
+func (b ByName) Swap(i, j int) { b[i], b[j] = b[j], b[i] }
+func (b ByName) Less(i, j int) bool {
+	return b[i].String() < b[j].String()
+}
 
 func (w *Walker) PrintPretty() {
+	if len(w.Counter) == 0 {
+		fmt.Println("No external dependencies found in this package")
+		return
+	}
+
+	selectors := w.Selectors
+	sort.Sort(ByName(selectors))
+
 	table := tablewriter.NewWriter(os.Stdout)
-	table.SetHeader([]string{"Name", "Type", "Count", "LOC", "LOCCum", "Depth", "DepthInt"})
+	table.SetHeader([]string{"Package", "Name", "Type", "Count", "LOC", "LOCCum", "Depth", "DepthInt"})
+
 	var results [][]string
-	for name, count := range w.Counter {
-		sel := w.SelectorsMap[name]
+	var lastPkg string
+	for _, sel := range selectors {
+		pkg := ""
+		if lastPkg != sel.Pkg.Name {
+			lastPkg = sel.Pkg.Name
+			pkg = sel.Pkg.Name
+		}
+		name := fmt.Sprintf("%s", sel.Name)
 		loc := fmt.Sprintf("%d", sel.LOC)
 		locCum := fmt.Sprintf("%d", sel.LOCCum)
 		depth := fmt.Sprintf("%d", sel.Depth-1)
 		depthInt := fmt.Sprintf("%d", sel.DepthInternal-1)
-		count := fmt.Sprintf("%d", count)
-		results = append(results, []string{name, sel.Type, count, loc, locCum, depth, depthInt})
+		count := fmt.Sprintf("%d", w.Counter[*sel])
+		results = append(results, []string{pkg, name, sel.Type, count, loc, locCum, depth, depthInt})
 	}
-	sort.Sort(ByName(results))
 	for _, v := range results {
 		table.Append(v)
 	}

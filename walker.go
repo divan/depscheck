@@ -15,10 +15,9 @@ type Walker struct {
 
 	Stdlib bool
 
+	Selectors    []*Selector
 	SelectorsMap map[string]*Selector
-	Counter      map[string]int
-
-	Selectors []*Selector
+	Counter      map[Selector]int
 }
 
 // NewWalker inits new AST walker.
@@ -42,10 +41,9 @@ func NewWalker(p *loader.Program) *Walker {
 
 		Stdlib: false,
 
+		Selectors:    []*Selector{},
 		SelectorsMap: make(map[string]*Selector),
-		Counter:      make(map[string]int),
-
-		Selectors: []*Selector{},
+		Counter:      make(map[Selector]int),
 	}
 }
 
@@ -137,9 +135,11 @@ func (w *Walker) WalkSelectorExpr(node ast.Node, pkg *loader.PackageInfo, expr *
 
 	sel := w.walkFunc(node, obj, pkg, name, internal)
 	if top && sel != nil {
-		w.Selectors = append(w.Selectors, sel)
-		w.SelectorsMap[sel.String()] = sel
-		w.Counter[sel.String()]++
+		if _, ok := w.SelectorsMap[sel.String()]; !ok {
+			w.Selectors = append(w.Selectors, sel)
+			w.SelectorsMap[sel.String()] = sel
+		}
+		w.Counter[*sel]++
 	}
 	return sel
 }
