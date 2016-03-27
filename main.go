@@ -44,6 +44,9 @@ func main() {
 				if ok {
 					// (pkg).pkgvar.Method()
 					obj = s.Obj()
+					if obj.Pkg() == nil {
+						return false
+					}
 					n = s.Obj().Pkg().Name()
 				} else {
 					// pkg.Func()
@@ -80,8 +83,8 @@ func main() {
 						sel.LOCCum, sel.DepthInternal = linesCum, depthInt
 					}
 				}
-				selectors[sel.Name] = sel
-				counter[sel.Name]++
+				selectors[sel.String()] = sel
+				counter[sel.String()]++
 			}
 			return true
 		})
@@ -205,7 +208,7 @@ func (w *Walker) WalkExternal(topNode ast.Node, parent *loader.PackageInfo) (lin
 			// lookup this object in package
 			obj := w.FindObject(parent, name)
 			if obj == nil {
-				return true
+				return false
 			}
 
 			if _, ok := obj.Type().(*types.Signature); ok {
@@ -228,25 +231,47 @@ func (w *Walker) WalkExternal(topNode ast.Node, parent *loader.PackageInfo) (lin
 				}
 			}
 		case *ast.SelectorExpr:
-			n := pkgName(x)
-			pkg := w.FindImport(parent, n)
-			if pkg == nil {
-				return true
+			var (
+				n   string // package name
+				obj types.Object
+			)
+			s, ok := parent.Selections[x]
+			if ok {
+				// (pkg).pkgvar.Method()
+				obj = s.Obj()
+				if obj.Pkg() == nil {
+					return false
+				}
+				n = obj.Pkg().Name()
+			} else {
+				// pkg.Func()
+				n = pkgName(x)
+			}
+
+			var pkg *loader.PackageInfo
+			if n == parent.Pkg.Name() {
+				pkg = parent
+			} else {
+				pkg = w.FindImport(parent, n)
+				if pkg == nil {
+					return false
+				}
 			}
 
 			name := x.Sel.Name
 
 			// lookup this object in package
-			obj := w.FindObject(pkg, name)
-
-			// skip recursive calls
 			if obj == nil {
-				return true
+				obj = w.FindObject(pkg, name)
+				if obj == nil {
+					return false
+				}
 			}
 
 			if _, ok := obj.Type().(*types.Signature); ok {
-
 				node := w.FindFnNode(pkg, name)
+
+				// skip recursive calls
 				if node == topNode {
 					return false
 				}
