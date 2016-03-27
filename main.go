@@ -7,7 +7,6 @@ import (
 	"go/types"
 	"os"
 	"sort"
-	"strings"
 
 	"golang.org/x/tools/go/loader"
 )
@@ -77,7 +76,6 @@ func main() {
 					node := w.FindFnNode(dp, x.Sel.Name)
 					if node != nil {
 						lines := w.Lines(node)
-						fmt.Println(dp.Pkg.Name(), x.Sel.Name)
 						_, depth, linesCum, depthInt := w.WalkExternal(node, dp)
 						sel.LOC, sel.Depth = lines, depth
 						sel.LOCCum, sel.DepthInternal = linesCum, depthInt
@@ -162,6 +160,8 @@ type Walker struct {
 	Packages   map[string]Package
 	CacheLOC   map[ast.Node]int
 	CacheNodes map[string]ast.Node
+
+	Stdlib bool
 }
 
 func NewWalker(p *loader.Program) *Walker {
@@ -172,6 +172,9 @@ func NewWalker(p *loader.Program) *Walker {
 	// prepare map of resolved imports
 	packages := make(map[string]Package)
 	for _, pkg := range top.Pkg.Imports() {
+		if IsStdlib(pkg.Path()) {
+			continue
+		}
 		packages[pkg.Name()] = Package{
 			Name: pkg.Name(),
 			Path: pkg.Path(),
@@ -183,6 +186,8 @@ func NewWalker(p *loader.Program) *Walker {
 		Packages:   packages,
 		CacheLOC:   make(map[ast.Node]int),
 		CacheNodes: make(map[string]ast.Node),
+
+		Stdlib: false,
 	}
 }
 
@@ -213,7 +218,6 @@ func (w *Walker) WalkExternal(topNode ast.Node, parent *loader.PackageInfo) (lin
 
 				if node != nil {
 					depthInt++
-					fmt.Println(strings.Repeat(" ", depthInt), parent.Pkg.Name(), name)
 					loc := w.Lines(node)
 					locCum += loc
 
@@ -235,6 +239,8 @@ func (w *Walker) WalkExternal(topNode ast.Node, parent *loader.PackageInfo) (lin
 
 			// lookup this object in package
 			obj := w.FindObject(pkg, name)
+
+			// skip recursive calls
 			if obj == nil {
 				return true
 			}
@@ -242,10 +248,12 @@ func (w *Walker) WalkExternal(topNode ast.Node, parent *loader.PackageInfo) (lin
 			if _, ok := obj.Type().(*types.Signature); ok {
 
 				node := w.FindFnNode(pkg, name)
+				if node == topNode {
+					return false
+				}
 
 				if node != nil {
 					depth++
-					fmt.Println(strings.Repeat(" ", depth), pkg.Pkg.Name(), name)
 					lines1, depth1, lines2, depth2 := w.WalkExternal(node, pkg)
 					lines = lines1
 					depth += depth1
@@ -300,6 +308,12 @@ func (w *Walker) FindFnNode(pkg *loader.PackageInfo, fnName string) ast.Node {
 func (w *Walker) FindImport(parent *loader.PackageInfo, name string) *loader.PackageInfo {
 	for _, p := range parent.Pkg.Imports() {
 		if p.Name() == name {
+			if !w.Stdlib {
+				std := IsStdlib(p.Path())
+				if std {
+					return nil
+				}
+			}
 			return w.P.Package(p.Path())
 		}
 	}
