@@ -27,9 +27,6 @@ func main() {
 	// TODO: work with all recursive sub-packages (optionally?)
 	top := p.InitialPackages()[0]
 
-	// find all selectors ('f.x') for imported packages
-	selectors := make(map[string]Selector)
-	counter := make(map[string]int)
 	for _, f := range top.Files {
 		ast.Inspect(f, func(n ast.Node) bool {
 			switch x := n.(type) {
@@ -54,20 +51,20 @@ func main() {
 				}
 
 				// if it's not a selector for external package, skip it
-				pkg, ok := w.Packages[n]
+				pkgInfo, ok := w.Packages[n]
 				if !ok {
 					break
 				}
 
 				sel := Selector{
-					Pkg:  pkg,
+					Pkg:  pkgInfo,
 					Name: x.Sel.Name,
 				}
 
 				// lookup this object in package
-				dp := p.Package(pkg.Path)
+				pkg := p.Package(pkgInfo.Path)
 				if obj == nil {
-					obj = w.FindObject(dp, sel.Name)
+					obj = w.FindObject(pkg, x.Sel.Name)
 					if obj == nil {
 						return true
 					}
@@ -75,16 +72,16 @@ func main() {
 				if _, ok := obj.Type().(*types.Signature); ok {
 					sel.Type = "func"
 
-					node := w.FindFnNode(dp, x.Sel.Name)
+					node := w.FindFnNode(pkg, x.Sel.Name)
 					if node != nil {
 						lines := w.LOC(node)
-						_, depth, linesCum, depthInt := w.WalkExternal(node, dp)
+						_, depth, linesCum, depthInt := w.Walk(node, pkg, true)
 						sel.LOC, sel.Depth = lines, depth
 						sel.LOCCum, sel.DepthInternal = linesCum, depthInt
 					}
 				}
-				selectors[sel.String()] = sel
-				counter[sel.String()]++
+				w.Selectors[sel.String()] = sel
+				w.Counter[sel.String()]++
 			}
 			return true
 		})
@@ -94,8 +91,8 @@ func main() {
 	table := tablewriter.NewWriter(os.Stdout)
 	table.SetHeader([]string{"Name", "LOC", "Type", "Count", "Depth", "LOCCum", "DepthInt"})
 	var results [][]string
-	for name, count := range counter {
-		sel := selectors[name]
+	for name, count := range w.Counter {
+		sel := w.Selectors[name]
 		loc := fmt.Sprintf("%d", sel.LOC)
 		depth := fmt.Sprintf("%d", sel.Depth)
 		locCum := fmt.Sprintf("%d", sel.LOCCum)
@@ -133,6 +130,9 @@ type Walker struct {
 	CacheNodes map[string]*ast.FuncDecl
 
 	Stdlib bool
+
+	Selectors map[string]Selector
+	Counter   map[string]int
 }
 
 func NewWalker(p *loader.Program) *Walker {
@@ -159,15 +159,21 @@ func NewWalker(p *loader.Program) *Walker {
 		CacheNodes: make(map[string]*ast.FuncDecl),
 
 		Stdlib: false,
+
+		Selectors: make(map[string]Selector),
+		Counter:   make(map[string]int),
 	}
 }
 
-// WalkExternal walks through function body block,
-// looking for external dependencies expressions.
-func (w *Walker) WalkExternal(topNode ast.Node, parent *loader.PackageInfo) (lines, depth, locCum, depthInt int) {
+// Walk walks through function body block,
+// looking for internal and external dependencies expressions.
+func (w *Walker) Walk(topNode ast.Node, parent *loader.PackageInfo, internal bool) (lines, depth, locCum, depthInt int) {
 	ast.Inspect(topNode, func(n ast.Node) bool {
 		switch x := n.(type) {
 		case *ast.CallExpr:
+			if !internal {
+				return false
+			}
 			expr, ok := x.Fun.(*ast.Ident)
 			if !ok {
 				break
@@ -192,7 +198,7 @@ func (w *Walker) WalkExternal(topNode ast.Node, parent *loader.PackageInfo) (lin
 					loc := w.LOC(node)
 					locCum += loc
 
-					lines1, depth1, lines2, depth2 := w.WalkExternal(node, parent)
+					lines1, depth1, lines2, depth2 := w.Walk(node, parent, true)
 					lines = lines1
 					depth += depth1
 					locCum += lines2
@@ -204,6 +210,7 @@ func (w *Walker) WalkExternal(topNode ast.Node, parent *loader.PackageInfo) (lin
 				n   string // package name
 				obj types.Object
 			)
+
 			s, ok := parent.Selections[x]
 			if ok {
 				// (pkg).pkgvar.Method()
@@ -247,7 +254,7 @@ func (w *Walker) WalkExternal(topNode ast.Node, parent *loader.PackageInfo) (lin
 
 				if node != nil {
 					depth++
-					lines1, depth1, lines2, depth2 := w.WalkExternal(node, pkg)
+					lines1, depth1, lines2, depth2 := w.Walk(node, pkg, true)
 					lines = lines1
 					depth += depth1
 					locCum += lines2
