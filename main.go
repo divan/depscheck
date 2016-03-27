@@ -77,7 +77,7 @@ func main() {
 
 					node := w.FindFnNode(dp, x.Sel.Name)
 					if node != nil {
-						lines := w.Lines(node)
+						lines := w.LOC(node)
 						_, depth, linesCum, depthInt := w.WalkExternal(node, dp)
 						sel.LOC, sel.Depth = lines, depth
 						sel.LOCCum, sel.DepthInternal = linesCum, depthInt
@@ -110,37 +110,6 @@ func main() {
 	table.Render() // Send output
 }
 
-func (w *Walker) Lines(node ast.Node) int {
-	var (
-		lines int
-		ok    bool
-	)
-	if lines, ok = w.CacheLOC[node]; ok {
-		return lines
-	}
-	ast.Inspect(node, func(n ast.Node) bool {
-		switch x := n.(type) {
-		case *ast.FuncDecl:
-			if x.Body == nil {
-				break
-			}
-			start := w.P.Fset.Position(x.Body.Lbrace)
-			end := w.P.Fset.Position(x.Body.Rbrace)
-			lines = end.Line - start.Line
-			if lines == 0 {
-				lines = 1
-			}
-			w.CacheLOC[node] = lines
-			return false
-		}
-		return true
-	})
-	if lines != 0 {
-		return lines
-	}
-	return 0
-}
-
 type ByName [][]string
 
 func (b ByName) Len() int           { return len(b) }
@@ -160,8 +129,8 @@ func pkgName(x *ast.SelectorExpr) string {
 type Walker struct {
 	P          *loader.Program
 	Packages   map[string]Package
-	CacheLOC   map[ast.Node]int
-	CacheNodes map[string]ast.Node
+	CacheLOC   map[*ast.FuncDecl]int
+	CacheNodes map[string]*ast.FuncDecl
 
 	Stdlib bool
 }
@@ -186,8 +155,8 @@ func NewWalker(p *loader.Program) *Walker {
 	return &Walker{
 		P:          p,
 		Packages:   packages,
-		CacheLOC:   make(map[ast.Node]int),
-		CacheNodes: make(map[string]ast.Node),
+		CacheLOC:   make(map[*ast.FuncDecl]int),
+		CacheNodes: make(map[string]*ast.FuncDecl),
 
 		Stdlib: false,
 	}
@@ -220,7 +189,7 @@ func (w *Walker) WalkExternal(topNode ast.Node, parent *loader.PackageInfo) (lin
 
 				if node != nil {
 					depthInt++
-					loc := w.Lines(node)
+					loc := w.LOC(node)
 					locCum += loc
 
 					lines1, depth1, lines2, depth2 := w.WalkExternal(node, parent)
@@ -296,9 +265,9 @@ func (w *Walker) FindObject(pkg *loader.PackageInfo, name string) types.Object {
 	return scope.Lookup(name)
 }
 
-func (w *Walker) FindFnNode(pkg *loader.PackageInfo, fnName string) ast.Node {
+func (w *Walker) FindFnNode(pkg *loader.PackageInfo, fnName string) *ast.FuncDecl {
 	var (
-		node ast.Node
+		node *ast.FuncDecl
 		ok   bool
 	)
 	qName := fmt.Sprintf("%s.%s", pkg.Pkg.Path(), fnName)
@@ -315,8 +284,8 @@ func (w *Walker) FindFnNode(pkg *loader.PackageInfo, fnName string) ast.Node {
 						return false
 						w.CacheNodes[qName] = nil
 					}
-					node = n
-					w.CacheNodes[qName] = n
+					node = x
+					w.CacheNodes[qName] = x
 					return false
 				}
 			}
@@ -342,4 +311,32 @@ func (w *Walker) FindImport(parent *loader.PackageInfo, name string) *loader.Pac
 		}
 	}
 	return nil
+}
+
+// LOC calculates readl Lines Of Code for the given function node.
+// node must be ast.FuncDecl, panics otherwise.
+func (w *Walker) LOC(node *ast.FuncDecl) int {
+	if lines, ok := w.CacheLOC[node]; ok {
+		return lines
+	}
+
+	body := node.Body
+	if body == nil {
+		return 0
+		w.CacheLOC[node] = 0
+	}
+
+	start := w.P.Fset.Position(body.Lbrace)
+	end := w.P.Fset.Position(body.Rbrace)
+	lines := end.Line - start.Line
+
+	// for cases line 'func foo() { bar() }'
+	// TODO: figure out how to calculate it smarter
+	if lines == 0 {
+		lines = 1
+	}
+
+	w.CacheLOC[node] = lines
+
+	return lines
 }
