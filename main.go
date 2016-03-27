@@ -7,6 +7,7 @@ import (
 	"go/types"
 	"os"
 	"sort"
+	"strings"
 
 	"golang.org/x/tools/go/loader"
 )
@@ -76,6 +77,7 @@ func main() {
 					node := w.FindFnNode(dp, x.Sel.Name)
 					if node != nil {
 						lines := w.Lines(node)
+						fmt.Println(dp.Pkg.Name(), x.Sel.Name)
 						_, depth, linesCum, depthInt := w.WalkExternal(node, dp)
 						sel.LOC, sel.Depth = lines, depth
 						sel.LOCCum, sel.DepthInternal = linesCum, depthInt
@@ -109,7 +111,13 @@ func main() {
 }
 
 func (w *Walker) Lines(node ast.Node) int {
-	var lines int
+	var (
+		lines int
+		ok    bool
+	)
+	if lines, ok = w.CacheLOC[node]; ok {
+		return lines
+	}
 	ast.Inspect(node, func(n ast.Node) bool {
 		switch x := n.(type) {
 		case *ast.FuncDecl:
@@ -122,6 +130,7 @@ func (w *Walker) Lines(node ast.Node) int {
 			if lines == 0 {
 				lines = 1
 			}
+			w.CacheLOC[node] = lines
 			return false
 		}
 		return true
@@ -149,8 +158,10 @@ func pkgName(x *ast.SelectorExpr) string {
 }
 
 type Walker struct {
-	P        *loader.Program
-	Packages map[string]Package
+	P          *loader.Program
+	Packages   map[string]Package
+	CacheLOC   map[ast.Node]int
+	CacheNodes map[string]ast.Node
 }
 
 func NewWalker(p *loader.Program) *Walker {
@@ -168,15 +179,17 @@ func NewWalker(p *loader.Program) *Walker {
 	}
 
 	return &Walker{
-		P:        p,
-		Packages: packages,
+		P:          p,
+		Packages:   packages,
+		CacheLOC:   make(map[ast.Node]int),
+		CacheNodes: make(map[string]ast.Node),
 	}
 }
 
 // WalkExternal walks through function body block,
 // looking for external dependencies expressions.
-func (w *Walker) WalkExternal(node ast.Node, parent *loader.PackageInfo) (lines, depth, locCum, depthInt int) {
-	ast.Inspect(node, func(n ast.Node) bool {
+func (w *Walker) WalkExternal(topNode ast.Node, parent *loader.PackageInfo) (lines, depth, locCum, depthInt int) {
+	ast.Inspect(topNode, func(n ast.Node) bool {
 		switch x := n.(type) {
 		case *ast.CallExpr:
 			expr, ok := x.Fun.(*ast.Ident)
@@ -193,9 +206,14 @@ func (w *Walker) WalkExternal(node ast.Node, parent *loader.PackageInfo) (lines,
 
 			if _, ok := obj.Type().(*types.Signature); ok {
 				node := w.FindFnNode(parent, name)
+				// skip recursive calls
+				if node == topNode {
+					return false
+				}
 
 				if node != nil {
 					depthInt++
+					fmt.Println(strings.Repeat(" ", depthInt), parent.Pkg.Name(), name)
 					loc := w.Lines(node)
 					locCum += loc
 
@@ -227,6 +245,7 @@ func (w *Walker) WalkExternal(node ast.Node, parent *loader.PackageInfo) (lines,
 
 				if node != nil {
 					depth++
+					fmt.Println(strings.Repeat(" ", depth), pkg.Pkg.Name(), name)
 					lines1, depth1, lines2, depth2 := w.WalkExternal(node, pkg)
 					lines = lines1
 					depth += depth1
@@ -246,7 +265,15 @@ func (w *Walker) FindObject(pkg *loader.PackageInfo, name string) types.Object {
 }
 
 func (w *Walker) FindFnNode(pkg *loader.PackageInfo, fnName string) ast.Node {
-	var node ast.Node
+	var (
+		node ast.Node
+		ok   bool
+	)
+	qName := fmt.Sprintf("%s.%s", pkg.Pkg.Path(), fnName)
+	node, ok = w.CacheNodes[qName]
+	if ok {
+		return node
+	}
 	for _, f := range pkg.Files {
 		ast.Inspect(f, func(n ast.Node) bool {
 			switch x := n.(type) {
@@ -254,8 +281,10 @@ func (w *Walker) FindFnNode(pkg *loader.PackageInfo, fnName string) ast.Node {
 				if x.Name.Name == fnName {
 					if x.Body == nil {
 						return false
+						w.CacheNodes[qName] = nil
 					}
 					node = n
+					w.CacheNodes[qName] = n
 					return false
 				}
 			}
