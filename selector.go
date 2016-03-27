@@ -31,3 +31,20 @@ type Selector struct {
 func (s *Selector) String() string {
 	return fmt.Sprintf("%s.%s", s.Pkg.Name, s.Name)
 }
+
+// NewSelector creates new Selector.
+func NewSelector(pkg, path, name string, loc int) *Selector {
+	return &Selector{
+		Pkg: Package{
+			Name: pkg,
+			Path: path,
+		},
+		Name: name,
+
+		LOC:    loc,
+		LOCCum: loc,
+
+		Depth:         1,
+		DepthInternal: 1,
+	}
+}

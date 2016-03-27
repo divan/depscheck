@@ -25,80 +25,83 @@ func main() {
 
 	// work only with top package for now.
 	// TODO: work with all recursive sub-packages (optionally?)
-	top := p.InitialPackages()[0]
+	topPkg := p.InitialPackages()[0]
 
-	for _, f := range top.Files {
-		ast.Inspect(f, func(n ast.Node) bool {
-			switch x := n.(type) {
-			case *ast.SelectorExpr:
-				var (
-					n   string // package name
-					obj types.Object
-				)
+	for _, f := range topPkg.Files {
+		w.Walk(f, topPkg, true)
+		/*
+			ast.Inspect(f, func(n ast.Node) bool {
+				switch x := n.(type) {
+				case *ast.SelectorExpr:
+					var (
+						n   string // package name
+						obj types.Object
+					)
 
-				// handle methods
-				s, ok := top.Selections[x]
-				if ok {
-					// (pkg).pkgvar.Method()
-					obj = s.Obj()
-					if obj.Pkg() == nil {
-						return false
+					// handle methods
+					s, ok := top.Selections[x]
+					if ok {
+						// (pkg).pkgvar.Method()
+						obj = s.Obj()
+						if obj.Pkg() == nil {
+							return false
+						}
+						n = s.Obj().Pkg().Name()
+					} else {
+						// pkg.Func()
+						n = pkgName(x)
 					}
-					n = s.Obj().Pkg().Name()
-				} else {
-					// pkg.Func()
-					n = pkgName(x)
-				}
 
-				// if it's not a selector for external package, skip it
-				pkgInfo, ok := w.Packages[n]
-				if !ok {
-					break
-				}
+					// if it's not a selector for external package, skip it
+					pkgInfo, ok := w.Packages[n]
+					if !ok {
+						break
+					}
 
-				sel := Selector{
-					Pkg:  pkgInfo,
-					Name: x.Sel.Name,
-				}
+					sel := Selector{
+						Pkg:  pkgInfo,
+						Name: x.Sel.Name,
+					}
 
-				// lookup this object in package
-				pkg := p.Package(pkgInfo.Path)
-				if obj == nil {
-					obj = w.FindObject(pkg, x.Sel.Name)
+					// lookup this object in package
+					pkg := p.Package(pkgInfo.Path)
 					if obj == nil {
-						return true
+						obj = w.FindObject(pkg, x.Sel.Name)
+						if obj == nil {
+							return true
+						}
 					}
-				}
-				if _, ok := obj.Type().(*types.Signature); ok {
-					sel.Type = "func"
+					if _, ok := obj.Type().(*types.Signature); ok {
+						sel.Type = "func"
 
-					node := w.FindFnNode(pkg, x.Sel.Name)
-					if node != nil {
-						lines := w.LOC(node)
-						_, depth, linesCum, depthInt := w.Walk(node, pkg, true)
-						sel.LOC, sel.Depth = lines, depth
-						sel.LOCCum, sel.DepthInternal = linesCum, depthInt
+						node := w.FindFnNode(pkg, x.Sel.Name)
+						if node != nil {
+							lines := w.LOC(node)
+							_, depth, linesCum, depthInt := w.Walk(node, pkg, false)
+							sel.LOC, sel.Depth = lines, depth
+							sel.LOCCum, sel.DepthInternal = linesCum, depthInt
+						}
 					}
+					w.Selectors[sel.String()] = sel
+					w.Counter[sel.String()]++
 				}
-				w.Selectors[sel.String()] = sel
-				w.Counter[sel.String()]++
-			}
-			return true
-		})
+				return true
+			})
+		*/
 	}
 
 	// Print stats
 	table := tablewriter.NewWriter(os.Stdout)
-	table.SetHeader([]string{"Name", "LOC", "Type", "Count", "Depth", "LOCCum", "DepthInt"})
+	table.SetHeader([]string{"Name", "Type", "Count", "LOC", "LOCCum", "Depth", "DepthInt"})
 	var results [][]string
 	for name, count := range w.Counter {
-		sel := w.Selectors[name]
+		sel := w.SelectorsMap[name]
 		loc := fmt.Sprintf("%d", sel.LOC)
-		depth := fmt.Sprintf("%d", sel.Depth)
 		locCum := fmt.Sprintf("%d", sel.LOCCum)
-		depthInt := fmt.Sprintf("%d", sel.DepthInternal)
+		depth := fmt.Sprintf("%d", sel.Depth-1)
+		depthInt := fmt.Sprintf("%d", sel.DepthInternal-1)
 		count := fmt.Sprintf("%d", count)
-		results = append(results, []string{name, loc, sel.Type, count, depth, locCum, depthInt})
+		results = append(results, []string{name, sel.Type, count, loc, locCum, depth, depthInt})
 	}
 	sort.Sort(ByName(results))
 	for _, v := range results {
@@ -131,8 +134,10 @@ type Walker struct {
 
 	Stdlib bool
 
-	Selectors map[string]Selector
-	Counter   map[string]int
+	SelectorsMap map[string]*Selector
+	Counter      map[string]int
+
+	Selectors []*Selector
 }
 
 func NewWalker(p *loader.Program) *Walker {
@@ -160,111 +165,131 @@ func NewWalker(p *loader.Program) *Walker {
 
 		Stdlib: false,
 
-		Selectors: make(map[string]Selector),
-		Counter:   make(map[string]int),
+		SelectorsMap: make(map[string]*Selector),
+		Counter:      make(map[string]int),
+
+		Selectors: []*Selector{},
 	}
 }
 
 // Walk walks through function body block,
 // looking for internal and external dependencies expressions.
-func (w *Walker) Walk(topNode ast.Node, parent *loader.PackageInfo, internal bool) (lines, depth, locCum, depthInt int) {
+func (w *Walker) Walk(topNode ast.Node, parent *loader.PackageInfo, top bool) *Selector {
+	var sel *Selector
 	ast.Inspect(topNode, func(n ast.Node) bool {
-		switch x := n.(type) {
-		case *ast.CallExpr:
-			if !internal {
+		if x, ok := n.(*ast.SelectorExpr); ok {
+			sel = w.WalkSelectorExpr(topNode, parent, x, top)
+			return false
+		}
+
+		if !top {
+			if x, ok := n.(*ast.CallExpr); ok {
+				sel = w.WalkCallExpr(topNode, parent, x, top)
+				if sel != nil {
+					sel.DepthInternal++
+				}
 				return false
-			}
-			expr, ok := x.Fun.(*ast.Ident)
-			if !ok {
-				break
-			}
-			name := expr.Name
-
-			// lookup this object in package
-			obj := w.FindObject(parent, name)
-			if obj == nil {
-				return false
-			}
-
-			if _, ok := obj.Type().(*types.Signature); ok {
-				node := w.FindFnNode(parent, name)
-				// skip recursive calls
-				if node == topNode {
-					return false
-				}
-
-				if node != nil {
-					depthInt++
-					loc := w.LOC(node)
-					locCum += loc
-
-					lines1, depth1, lines2, depth2 := w.Walk(node, parent, true)
-					lines = lines1
-					depth += depth1
-					locCum += lines2
-					depthInt += depth2
-				}
-			}
-		case *ast.SelectorExpr:
-			var (
-				n   string // package name
-				obj types.Object
-			)
-
-			s, ok := parent.Selections[x]
-			if ok {
-				// (pkg).pkgvar.Method()
-				obj = s.Obj()
-				if obj.Pkg() == nil {
-					return false
-				}
-				n = obj.Pkg().Name()
-			} else {
-				// pkg.Func()
-				n = pkgName(x)
-			}
-
-			var pkg *loader.PackageInfo
-			if n == parent.Pkg.Name() {
-				pkg = parent
-			} else {
-				pkg = w.FindImport(parent, n)
-				if pkg == nil {
-					return false
-				}
-			}
-
-			name := x.Sel.Name
-
-			// lookup this object in package
-			if obj == nil {
-				obj = w.FindObject(pkg, name)
-				if obj == nil {
-					return false
-				}
-			}
-
-			if _, ok := obj.Type().(*types.Signature); ok {
-				node := w.FindFnNode(pkg, name)
-
-				// skip recursive calls
-				if node == topNode {
-					return false
-				}
-
-				if node != nil {
-					depth++
-					lines1, depth1, lines2, depth2 := w.Walk(node, pkg, true)
-					lines = lines1
-					depth += depth1
-					locCum += lines2
-					depthInt += depth2
-				}
 			}
 		}
 		return true
 	})
-	return
+	return sel
+}
+
+func (w *Walker) WalkCallExpr(node ast.Node, pkg *loader.PackageInfo, expr *ast.CallExpr, top bool) *Selector {
+	var name string
+	switch expr := expr.Fun.(type) {
+	case *ast.Ident:
+		name = expr.Name
+	case *ast.SelectorExpr:
+		return w.WalkSelectorExpr(node, pkg, expr, top)
+	}
+
+	// lookup this object in package
+	obj := w.FindObject(pkg, name)
+	if obj == nil {
+		return nil
+	}
+
+	return w.walkFunc(node, obj, pkg, name, true)
+}
+
+func (w *Walker) WalkSelectorExpr(node ast.Node, parent *loader.PackageInfo, expr *ast.SelectorExpr, top bool) *Selector {
+	var (
+		n   string // package name
+		obj types.Object
+	)
+
+	// Look for Selections map first
+	s, ok := parent.Selections[expr]
+	if ok {
+		// (pkg).pkgvar.Method()
+		obj = s.Obj()
+		if obj.Pkg() == nil {
+			return nil
+		}
+		n = obj.Pkg().Name()
+	} else {
+		// pkg.Func()
+		n = pkgName(expr)
+	}
+
+	var pkg *loader.PackageInfo
+	if n == parent.Pkg.Name() {
+		pkg = parent
+	} else {
+		pkg = w.FindImport(parent, n)
+		if pkg == nil {
+			return nil
+		}
+	}
+
+	name := expr.Sel.Name
+	internal := (n == parent.Pkg.Name())
+
+	// lookup this object in package
+	if obj == nil {
+		obj = w.FindObject(pkg, name)
+		if obj == nil {
+			return nil
+		}
+	}
+
+	sel := w.walkFunc(node, obj, pkg, name, internal)
+	if top && sel != nil {
+		w.Selectors = append(w.Selectors, sel)
+		w.SelectorsMap[sel.String()] = sel
+		w.Counter[sel.String()]++
+	}
+	return sel
+}
+
+func (w *Walker) walkFunc(node ast.Node, obj types.Object, pkg *loader.PackageInfo, name string, internal bool) *Selector {
+	if _, ok := obj.Type().(*types.Signature); ok {
+		fnDecl := w.FindFnNode(pkg, name)
+		if fnDecl != nil {
+			// skip recursive calls
+			if fnDecl == node {
+				return nil
+			}
+
+			loc := w.LOC(fnDecl)
+
+			s := NewSelector(pkg.Pkg.Name(), pkg.Pkg.Path(), name, loc)
+
+			sel := w.Walk(fnDecl, pkg, false)
+			if sel != nil {
+				if !internal {
+					s.DepthInternal += sel.DepthInternal
+				} else {
+					s.Depth += sel.Depth
+				}
+				s.LOCCum += sel.LOCCum
+			}
+			return s
+		}
+	}
+	return nil
 }
 
 func (w *Walker) FindObject(pkg *loader.PackageInfo, name string) types.Object {
