@@ -25,7 +25,7 @@ func (w *Walker) PrintPretty() {
 	sort.Sort(ByName(selectors))
 
 	table := tablewriter.NewWriter(os.Stdout)
-	table.SetHeader([]string{"Package", "Name", "Type", "Count", "LOC", "LOCCum", "Depth", "DepthInt"})
+	table.SetHeader([]string{"Pkg", "Recv", "Name", "Type", "Count", "LOC", "LOCCum", "Depth", "DepthInt"})
 
 	var results [][]string
 	var lastPkg string
@@ -35,13 +35,12 @@ func (w *Walker) PrintPretty() {
 			lastPkg = sel.Pkg.Name
 			pkg = sel.Pkg.Name
 		}
-		name := fmt.Sprintf("%s", sel.Name)
 		loc := fmt.Sprintf("%d", sel.LOC)
 		locCum := fmt.Sprintf("%d", sel.LOCCum)
 		depth := fmt.Sprintf("%d", sel.Depth)
 		depthInt := fmt.Sprintf("%d", sel.DepthInternal)
 		count := fmt.Sprintf("%d", w.Counter[*sel])
-		results = append(results, []string{pkg, name, sel.Type, count, loc, locCum, depth, depthInt})
+		results = append(results, []string{pkg, sel.Recv, sel.Name, sel.Type, count, loc, locCum, depth, depthInt})
 	}
 	for _, v := range results {
 		table.Append(v)

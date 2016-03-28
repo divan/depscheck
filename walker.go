@@ -108,6 +108,7 @@ func (w *Walker) WalkSelectorExpr(sel *Selector, node ast.Node, pkg *loader.Pack
 	var (
 		pkgName string
 		obj     types.Object
+		recv    string
 	)
 
 	// Look for Selections map first
@@ -117,6 +118,9 @@ func (w *Walker) WalkSelectorExpr(sel *Selector, node ast.Node, pkg *loader.Pack
 		obj = s.Obj()
 		if obj.Pkg() == nil {
 			return sel
+		}
+		if s.Kind() == types.MethodVal {
+			recv = recvFromSelector(s.Recv())
 		}
 		pkgName = obj.Pkg().Name()
 	} else {
@@ -157,6 +161,7 @@ func (w *Walker) WalkSelectorExpr(sel *Selector, node ast.Node, pkg *loader.Pack
 		if sel == nil {
 			sel = NewSelector(pkg, name)
 			sel.LOC = w.LOC(fnDecl)
+			sel.Recv = recv
 		} else {
 			if internal {
 				sel.DepthInternal++
@@ -165,6 +170,11 @@ func (w *Walker) WalkSelectorExpr(sel *Selector, node ast.Node, pkg *loader.Pack
 			}
 		}
 
+		if sel.Recv == "" {
+			sel.Type = "func"
+		} else {
+			sel.Type = "method"
+		}
 		w.processFunc(sel, fnDecl, pkg, name)
 	}
 	return sel
@@ -271,4 +281,18 @@ func packageName(x *ast.SelectorExpr) string {
 func isFunc(obj types.Object) bool {
 	_, ok := obj.Type().(*types.Signature)
 	return ok
+}
+
+func recvFromSelector(s types.Type) string {
+	if recv, ok := s.(*types.Named); ok {
+		return recv.Obj().Name()
+	}
+	if recv, ok := s.(*types.Pointer); ok {
+		named, ok := recv.Elem().(*types.Named)
+		if !ok {
+			return ""
+		}
+		return fmt.Sprintf("*%s", named.Obj().Name())
+	}
+	return ""
 }

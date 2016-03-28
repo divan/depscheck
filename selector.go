@@ -14,6 +14,7 @@ type Selector struct {
 	Pkg  Package
 	Name string
 	Type string
+	Recv string
 
 	// Applies for functions
 	LOC           int // actual Lines Of Code
@@ -24,6 +25,9 @@ type Selector struct {
 
 // String implements Stringer interface for Selector.
 func (s *Selector) String() string {
+	if s.Recv != "" {
+		return fmt.Sprintf("%s.(%s).%s", s.Pkg.Name, s.Recv, s.Name)
+	}
 	return fmt.Sprintf("%s.%s", s.Pkg.Name, s.Name)
 }
 
