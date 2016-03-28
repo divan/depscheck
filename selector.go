@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"golang.org/x/tools/go/loader"
 )
 
 // Selector represents Go language selector (x.f),
@@ -27,18 +28,12 @@ func (s *Selector) String() string {
 }
 
 // NewSelector creates new Selector.
-func NewSelector(pkg, path, name string, loc int) *Selector {
+func NewSelector(pkg *loader.PackageInfo, name string) *Selector {
 	return &Selector{
 		Pkg: Package{
-			Name: pkg,
-			Path: path,
+			Name: pkg.Pkg.Name(),
+			Path: pkg.Pkg.Path(),
 		},
 		Name: name,
-
-		LOC:    loc,
-		LOCCum: loc,
-
-		Depth:         1,
-		DepthInternal: 1,
 	}
 }

@@ -38,8 +38,8 @@ func (w *Walker) PrintPretty() {
 		name := fmt.Sprintf("%s", sel.Name)
 		loc := fmt.Sprintf("%d", sel.LOC)
 		locCum := fmt.Sprintf("%d", sel.LOCCum)
-		depth := fmt.Sprintf("%d", sel.Depth-1)
-		depthInt := fmt.Sprintf("%d", sel.DepthInternal-1)
+		depth := fmt.Sprintf("%d", sel.Depth)
+		depthInt := fmt.Sprintf("%d", sel.DepthInternal)
 		count := fmt.Sprintf("%d", w.Counter[*sel])
 		results = append(results, []string{pkg, name, sel.Type, count, loc, locCum, depth, depthInt})
 	}
