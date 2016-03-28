@@ -26,6 +26,7 @@ func main() {
 				if x, ok := n.(*ast.SelectorExpr); ok {
 					sel := w.WalkSelectorExpr(file, pkg, x)
 					if sel != nil && sel.Pkg.Path != pkg.Pkg.Path() {
+						fmt.Println("TOP", sel.Name, sel.Depth, sel.DepthInternal)
 						if _, ok := w.SelectorsMap[sel.String()]; !ok {
 							w.Selectors = append(w.Selectors, sel)
 							w.SelectorsMap[sel.String()] = sel

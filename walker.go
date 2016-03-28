@@ -47,25 +47,33 @@ func NewWalker(p *loader.Program) *Walker {
 	}
 }
 
-// Walk walks through function body block (node),
+// WalkFnBody walks through function body block (node),
 // looking for internal and external dependencies expressions.
-func (w *Walker) Walk(node ast.Node, pkg *loader.PackageInfo) *Selector {
-	var sel *Selector
+func (w *Walker) WalkFnBody(node *ast.FuncDecl, pkg *loader.PackageInfo) *Selector {
+	sel := NewSelector(pkg.Pkg.Name(), pkg.Pkg.Path(), node.Name.Name, 0)
+	fmt.Printf(">>>> %v\n", node.Name)
 	ast.Inspect(node, func(n ast.Node) bool {
-		if x, ok := n.(*ast.SelectorExpr); ok {
-			sel = w.WalkSelectorExpr(node, pkg, x)
-			return sel != nil
-		}
-
-		if x, ok := n.(*ast.CallExpr); ok {
-			sel = w.WalkCallExpr(node, pkg, x)
-			if sel != nil {
-				sel.DepthInternal++
+		switch x := n.(type) {
+		case *ast.SelectorExpr:
+			s := w.WalkSelectorExpr(node, pkg, x)
+			if s != nil {
+				sel.Depth += s.Depth
+				sel.DepthInternal += s.DepthInternal
+				sel.LOCCum += s.LOCCum
 			}
-			return sel != nil
+			return false
+		case *ast.CallExpr:
+			s := w.WalkCallExpr(node, pkg, x)
+			if s != nil {
+				sel.Depth += s.Depth
+				sel.DepthInternal += s.DepthInternal
+				sel.LOCCum += s.LOCCum
+			}
+			return false
 		}
 		return true
 	})
+	fmt.Printf("<<<< %v: %v\n", node.Name, sel)
 	return sel
 }
 
@@ -86,7 +94,8 @@ func (w *Walker) WalkCallExpr(node ast.Node, pkg *loader.PackageInfo, expr *ast.
 		return nil
 	}
 
-	return w.walkFunc(node, obj, pkg, name, true)
+	sel := w.walkFunc(node, obj, pkg, name, true)
+	return sel
 }
 
 // WalkSelectorExpr walks throug SelecorExpr node.
@@ -129,7 +138,11 @@ func (w *Walker) WalkSelectorExpr(node ast.Node, pkg *loader.PackageInfo, expr *
 		}
 	}
 
-	return w.walkFunc(node, obj, pkg, name, internal)
+	sel := w.walkFunc(node, obj, pkg, name, internal)
+	if sel != nil {
+		fmt.Println("  EXPR", sel.Name, sel.Depth, sel.DepthInternal)
+	}
+	return sel
 }
 
 func (w *Walker) walkFunc(node ast.Node, obj types.Object, pkg *loader.PackageInfo, name string, internal bool) *Selector {
@@ -145,7 +158,7 @@ func (w *Walker) walkFunc(node ast.Node, obj types.Object, pkg *loader.PackageIn
 
 			s := NewSelector(pkg.Pkg.Name(), pkg.Pkg.Path(), name, loc)
 
-			sel := w.Walk(fnDecl, pkg)
+			sel := w.WalkFnBody(fnDecl, pkg)
 			if sel != nil {
 				if !internal {
 					s.DepthInternal += sel.DepthInternal
@@ -153,6 +166,9 @@ func (w *Walker) walkFunc(node ast.Node, obj types.Object, pkg *loader.PackageIn
 					s.Depth += sel.Depth
 				}
 				s.LOCCum += sel.LOCCum
+			}
+			if sel != nil {
+				fmt.Println("    SEL FUNC", internal, s.Name, sel.Name, s.Depth, s.DepthInternal)
 			}
 			return s
 		}
