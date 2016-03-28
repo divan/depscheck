@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"go/ast"
 	"os"
 
 	"golang.org/x/tools/go/loader"
@@ -21,7 +22,20 @@ func main() {
 
 	for _, pkg := range p.InitialPackages() {
 		for _, file := range pkg.Files {
-			w.Walk(file, pkg, true)
+			ast.Inspect(file, func(n ast.Node) bool {
+				if x, ok := n.(*ast.SelectorExpr); ok {
+					sel := w.WalkSelectorExpr(file, pkg, x)
+					if sel != nil && sel.Pkg.Path != pkg.Pkg.Path() {
+						if _, ok := w.SelectorsMap[sel.String()]; !ok {
+							w.Selectors = append(w.Selectors, sel)
+							w.SelectorsMap[sel.String()] = sel
+						}
+						w.Counter[*sel]++
+					}
+					return true
+				}
+				return true
+			})
 		}
 	}
 

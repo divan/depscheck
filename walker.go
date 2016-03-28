@@ -49,25 +49,20 @@ func NewWalker(p *loader.Program) *Walker {
 
 // Walk walks through function body block (node),
 // looking for internal and external dependencies expressions.
-//
-// 'top' means that it's top-level walk, which must be handled a bit
-// differently.
-func (w *Walker) Walk(node ast.Node, pkg *loader.PackageInfo, top bool) *Selector {
+func (w *Walker) Walk(node ast.Node, pkg *loader.PackageInfo) *Selector {
 	var sel *Selector
 	ast.Inspect(node, func(n ast.Node) bool {
 		if x, ok := n.(*ast.SelectorExpr); ok {
-			sel = w.WalkSelectorExpr(node, pkg, x, top)
-			return false
+			sel = w.WalkSelectorExpr(node, pkg, x)
+			return sel != nil
 		}
 
-		if !top {
-			if x, ok := n.(*ast.CallExpr); ok {
-				sel = w.WalkCallExpr(node, pkg, x, top)
-				if sel != nil {
-					sel.DepthInternal++
-				}
-				return false
+		if x, ok := n.(*ast.CallExpr); ok {
+			sel = w.WalkCallExpr(node, pkg, x)
+			if sel != nil {
+				sel.DepthInternal++
 			}
+			return sel != nil
 		}
 		return true
 	})
@@ -76,13 +71,13 @@ func (w *Walker) Walk(node ast.Node, pkg *loader.PackageInfo, top bool) *Selecto
 
 // WalkCallExpr walks down through CallExpr AST-node. It may represent both
 // local and external dependency call, so handle both.
-func (w *Walker) WalkCallExpr(node ast.Node, pkg *loader.PackageInfo, expr *ast.CallExpr, top bool) *Selector {
+func (w *Walker) WalkCallExpr(node ast.Node, pkg *loader.PackageInfo, expr *ast.CallExpr) *Selector {
 	var name string
 	switch expr := expr.Fun.(type) {
 	case *ast.Ident:
 		name = expr.Name
 	case *ast.SelectorExpr:
-		return w.WalkSelectorExpr(node, pkg, expr, top)
+		return w.WalkSelectorExpr(node, pkg, expr)
 	}
 
 	// lookup this object in package
@@ -95,7 +90,7 @@ func (w *Walker) WalkCallExpr(node ast.Node, pkg *loader.PackageInfo, expr *ast.
 }
 
 // WalkSelectorExpr walks throug SelecorExpr node.
-func (w *Walker) WalkSelectorExpr(node ast.Node, pkg *loader.PackageInfo, expr *ast.SelectorExpr, top bool) *Selector {
+func (w *Walker) WalkSelectorExpr(node ast.Node, pkg *loader.PackageInfo, expr *ast.SelectorExpr) *Selector {
 	var (
 		pkgName string
 		obj     types.Object
@@ -118,6 +113,7 @@ func (w *Walker) WalkSelectorExpr(node ast.Node, pkg *loader.PackageInfo, expr *
 	internal := (pkgName == pkg.Pkg.Name())
 	if !internal {
 		pkg = w.FindImport(pkg, pkgName)
+
 		if pkg == nil {
 			return nil
 		}
@@ -133,15 +129,7 @@ func (w *Walker) WalkSelectorExpr(node ast.Node, pkg *loader.PackageInfo, expr *
 		}
 	}
 
-	sel := w.walkFunc(node, obj, pkg, name, internal)
-	if top && sel != nil {
-		if _, ok := w.SelectorsMap[sel.String()]; !ok {
-			w.Selectors = append(w.Selectors, sel)
-			w.SelectorsMap[sel.String()] = sel
-		}
-		w.Counter[*sel]++
-	}
-	return sel
+	return w.walkFunc(node, obj, pkg, name, internal)
 }
 
 func (w *Walker) walkFunc(node ast.Node, obj types.Object, pkg *loader.PackageInfo, name string, internal bool) *Selector {
@@ -157,7 +145,7 @@ func (w *Walker) walkFunc(node ast.Node, obj types.Object, pkg *loader.PackageIn
 
 			s := NewSelector(pkg.Pkg.Name(), pkg.Pkg.Path(), name, loc)
 
-			sel := w.Walk(fnDecl, pkg, false)
+			sel := w.Walk(fnDecl, pkg)
 			if sel != nil {
 				if !internal {
 					s.DepthInternal += sel.DepthInternal
