@@ -18,6 +18,8 @@ type Walker struct {
 	Selectors    []*Selector
 	SelectorsMap map[string]*Selector
 	Counter      map[Selector]int
+
+	Visited map[*ast.FuncDecl]bool
 }
 
 // NewWalker inits new AST walker.
@@ -44,6 +46,8 @@ func NewWalker(p *loader.Program) *Walker {
 		Selectors:    []*Selector{},
 		SelectorsMap: make(map[string]*Selector),
 		Counter:      make(map[Selector]int),
+
+		Visited: make(map[*ast.FuncDecl]bool),
 	}
 }
 
@@ -84,7 +88,7 @@ func (w *Walker) WalkCallExpr(sel *Selector, node ast.Node, pkg *loader.PackageI
 	if _, ok := obj.Type().(*types.Signature); ok {
 		fnDecl := w.FindFnNode(pkg, name)
 		// skip recursive calls
-		if fnDecl == node {
+		if w.Visited[fnDecl] {
 			return sel
 		}
 		if fnDecl != nil {
@@ -146,7 +150,7 @@ func (w *Walker) WalkSelectorExpr(sel *Selector, node ast.Node, pkg *loader.Pack
 		}
 
 		// skip recursive calls
-		if fnDecl == node {
+		if w.Visited[fnDecl] {
 			return sel
 		}
 
@@ -168,6 +172,7 @@ func (w *Walker) WalkSelectorExpr(sel *Selector, node ast.Node, pkg *loader.Pack
 
 func (w *Walker) processFunc(sel *Selector, fnDecl *ast.FuncDecl, pkg *loader.PackageInfo, name string) *Selector {
 	sel.LOCCum += w.LOC(fnDecl)
+	w.Visited[fnDecl] = true
 	w.WalkFnBody(sel, fnDecl, pkg)
 	return sel
 }
