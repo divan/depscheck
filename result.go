@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"github.com/olekukonko/tablewriter"
+	"io"
 	"os"
 	"sort"
 )
@@ -76,10 +77,58 @@ func (r *Result) All() []*Selector {
 	return ret
 }
 
+// PackageStats returns stats by packages in all selectors.
+func (r *Result) PackagesStats() []*PackageStat {
+	pkgs := make(map[Package]*PackageStat)
+	for _, sel := range r.Selectors {
+		if _, ok := pkgs[sel.Pkg]; !ok {
+			pkgs[sel.Pkg] = NewPackageStat(sel.Pkg)
+		}
+		pkgs[sel.Pkg].DepsCount++
+		pkgs[sel.Pkg].DepsCallsCount += r.Counter[sel.ID()]
+		pkgs[sel.Pkg].LOCCum += sel.LOCCum
+		pkgs[sel.Pkg].Depth += sel.Depth
+		pkgs[sel.Pkg].DepthInternal += sel.DepthInternal
+
+	}
+
+	var ret []*PackageStat
+	for _, stat := range pkgs {
+		ret = append(ret, stat)
+	}
+	sort.Sort(ByPackageName(ret))
+	return ret
+}
+
 type ByName []*Selector
 
 func (b ByName) Len() int      { return len(b) }
 func (b ByName) Swap(i, j int) { b[i], b[j] = b[j], b[i] }
 func (b ByName) Less(i, j int) bool {
 	return b[i].ID() < b[j].ID()
+}
+
+type ByPackageName []*PackageStat
+
+func (b ByPackageName) Len() int      { return len(b) }
+func (b ByPackageName) Swap(i, j int) { b[i], b[j] = b[j], b[i] }
+func (b ByPackageName) Less(i, j int) bool {
+	return b[i].Name < b[j].Name
+}
+
+// LinterOutput analyzes results and print linter output.
+//
+// Linter output means suggestions which dependencies may be
+// copied to your source, because of its size.
+func (r *Result) LinterOutput(w io.Writer) {
+	if len(r.Counter) == 0 {
+		return
+	}
+
+	for _, p := range r.PackagesStats() {
+		if p.CanBeAvoided() {
+			fmt.Fprintf(w, "Package %s (%s) is a good candidate for removing from dependencies.\n", p.Name, p.Path)
+			fmt.Fprintf(w, "  Only %d LOC used, in %d calls, with %d level of nesting\n", p.LOCCum, p.DepsCount, p.DepthInternal)
+		}
+	}
 }

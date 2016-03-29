@@ -9,8 +9,9 @@ import (
 )
 
 var (
-	stdlib = flag.Bool("stdlib", false, "Threat stdlib packages as external dependencies")
-	tests  = flag.Bool("tests", false, "Include tests for deps analysis.")
+	stdlib  = flag.Bool("stdlib", false, "Threat stdlib packages as external dependencies")
+	tests   = flag.Bool("tests", false, "Include tests for deps analysis")
+	verbose = flag.Bool("v", false, "Be verbose and print whole deps info table")
 )
 
 func main() {
@@ -30,7 +31,10 @@ func main() {
 
 	result := w.TopWalk()
 
-	result.PrintPretty()
+	if *verbose {
+		result.PrintPretty()
+	}
+	result.LinterOutput(os.Stdout)
 }
 
 func Usage() {
