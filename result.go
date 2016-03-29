@@ -7,21 +7,36 @@ import (
 	"sort"
 )
 
-type ByName []*Selector
-
-func (b ByName) Len() int      { return len(b) }
-func (b ByName) Swap(i, j int) { b[i], b[j] = b[j], b[i] }
-func (b ByName) Less(i, j int) bool {
-	return b[i].String() < b[j].String()
+// Result holds final result of this tool.
+type Result struct {
+	SelectorsMap map[string]*Selector
+	Counter      map[Selector]int
 }
 
+// NewResult inits new Result.
+func NewResult() *Result {
+	return &Result{
+		SelectorsMap: make(map[string]*Selector),
+		Counter:      make(map[Selector]int),
+	}
+}
+
+// Add adds new selector to the result.
+func (r *Result) Add(sel *Selector) {
+	if _, ok := r.SelectorsMap[sel.String()]; !ok {
+		r.SelectorsMap[sel.String()] = sel
+	}
+	r.Counter[*sel]++
+}
+
+// PrintPretty prints results to stdout in a pretty table form.
 func (r *Result) PrintPretty() {
 	if len(r.Counter) == 0 {
 		fmt.Println("No external dependencies found in this package")
 		return
 	}
 
-	selectors := r.Selectors
+	selectors := r.All()
 	sort.Sort(ByName(selectors))
 
 	table := tablewriter.NewWriter(os.Stdout)
@@ -49,4 +64,21 @@ func (r *Result) PrintPretty() {
 		table.Append(v)
 	}
 	table.Render() // Send output
+}
+
+// All returns all known selectors in result.
+func (r *Result) All() []*Selector {
+	var ret []*Selector
+	for _, sel := range r.SelectorsMap {
+		ret = append(ret, sel)
+	}
+	return ret
+}
+
+type ByName []*Selector
+
+func (b ByName) Len() int      { return len(b) }
+func (b ByName) Swap(i, j int) { b[i], b[j] = b[j], b[i] }
+func (b ByName) Less(i, j int) bool {
+	return b[i].String() < b[j].String()
 }
