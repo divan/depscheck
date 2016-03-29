@@ -9,7 +9,8 @@ import (
 )
 
 var (
-	stdlib = flag.Bool("stdlib", false, "Thread stdlib packages as external dependencies")
+	stdlib = flag.Bool("stdlib", false, "Threat stdlib packages as external dependencies")
+	tests  = flag.Bool("tests", false, "Include tests for deps analysis.")
 )
 
 func main() {
@@ -18,7 +19,7 @@ func main() {
 
 	var conf loader.Config
 
-	conf.FromArgs(flag.Args(), false)
+	conf.FromArgs(flag.Args(), *tests)
 	p, err := conf.Load()
 	if err != nil {
 		fmt.Println(err)
