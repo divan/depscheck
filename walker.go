@@ -122,7 +122,14 @@ func (w *Walker) WalkSelectorExpr(sel *Selector, node ast.Node, parent *loader.P
 		return sel
 	}
 
-	if isFunc(obj) {
+	// if name of current package(parent) and pkg of selector are equal, it's internal func/method call
+	internal := (pkgName == parent.Pkg.Name())
+
+	if isField(obj) {
+		_, recv := recvAndType(expr, parent)
+		typ := "var"
+		sel = NewSelector(pkg, name, recv, typ, 0)
+	} else if isFunc(obj) {
 		fnDecl := w.FindFnNode(pkg, name)
 		if fnDecl == nil {
 			return sel
@@ -138,8 +145,6 @@ func (w *Walker) WalkSelectorExpr(sel *Selector, node ast.Node, parent *loader.P
 			typ, recv := recvAndType(expr, parent)
 			sel = NewSelector(pkg, name, recv, typ, loc)
 		} else {
-			// if name of current package(parent) and pkg of selector are equal, it's internal func/method call
-			internal := (pkgName == parent.Pkg.Name())
 			sel.IncDepth(internal)
 		}
 
@@ -251,6 +256,12 @@ func isFunc(obj types.Object) bool {
 	return ok
 }
 
+func isField(obj types.Object) bool {
+	// TODO: add pointers support
+	_, ok := obj.Type().(*types.Named)
+	return ok
+}
+
 func recvFromSelector(s types.Type) string {
 	if recv, ok := s.(*types.Named); ok {
 		return recv.Obj().Name()
@@ -285,11 +296,14 @@ func recvAndType(expr *ast.SelectorExpr, parent *loader.PackageInfo) (string, st
 		switch s.Kind() {
 		case types.MethodVal:
 			recv = recvFromSelector(s.Recv())
+			typ = "func"
 			if recv != "" {
 				typ = "method"
 			}
 		case types.FieldVal:
 			typ = "field"
+		case types.MethodExpr:
+			typ = "func"
 		}
 	}
 	return typ, recv

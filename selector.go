@@ -26,9 +26,9 @@ type Selector struct {
 // String implements Stringer interface for Selector.
 func (s *Selector) String() string {
 	if s.Recv != "" {
-		return fmt.Sprintf("%s.(%s).%s", s.Pkg.Name, s.Recv, s.Name)
+		return fmt.Sprintf("%s.(%s).%s.%s", s.Pkg.Name, s.Recv, s.Type, s.Name)
 	}
-	return fmt.Sprintf("%s.%s", s.Pkg.Name, s.Name)
+	return fmt.Sprintf("%s.%s.%s", s.Pkg.Name, s.Type, s.Name)
 }
 
 // NewSelector creates new Selector.
