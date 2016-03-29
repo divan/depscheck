@@ -5,6 +5,7 @@ import (
 	"go/ast"
 	"go/types"
 	"golang.org/x/tools/go/loader"
+	"strings"
 )
 
 type Walker struct {
@@ -55,10 +56,10 @@ func (w *Walker) TopWalk() *Result {
 		for _, file := range pkg.Files {
 			ast.Inspect(file, func(n ast.Node) bool {
 				if x, ok := n.(*ast.SelectorExpr); ok {
-					pkgName := pkgNameFromExpr(x, pkg)
+					pkgName, pkgPath := pkgNameFromExpr(x, pkg, file)
 
 					// skip funcs/methods of current package
-					if pkgName == pkg.Pkg.Name() {
+					if pkgName == pkg.Pkg.Name() || pkgPath == pkg.Pkg.Path() {
 						return true
 					}
 
@@ -129,12 +130,17 @@ func (w *Walker) WalkCallExpr(sel *Selector, node ast.Node, pkg *loader.PackageI
 
 // WalkSelectorExpr walks throug SelecorExpr node.
 func (w *Walker) WalkSelectorExpr(sel *Selector, node ast.Node, parent *loader.PackageInfo, expr *ast.SelectorExpr) *Selector {
-	pkgName := pkgNameFromExpr(expr, parent)
-	if pkgName == "" {
+	var pkgName, pkgPath string
+	if file, ok := node.(*ast.File); ok {
+		pkgName, pkgPath = pkgNameFromExpr(expr, parent, file)
+	} else {
+		pkgName, pkgPath = pkgNameFromExpr(expr, parent, nil)
+	}
+	if pkgName == "" && pkgPath == "" {
 		return nil
 	}
 
-	pkg := w.resolvePkg(parent, pkgName)
+	pkg := w.resolvePkg(parent, pkgName, pkgPath)
 	if pkg == nil {
 		return sel
 	}
@@ -222,9 +228,9 @@ func (w *Walker) FindFnNode(pkg *loader.PackageInfo, fnName string) *ast.FuncDec
 	return nil
 }
 
-func (w *Walker) FindImport(pkg *loader.PackageInfo, name string) *loader.PackageInfo {
+func (w *Walker) FindImport(pkg *loader.PackageInfo, name, path string) *loader.PackageInfo {
 	for _, p := range pkg.Pkg.Imports() {
-		if p.Name() == name {
+		if p.Path() == path || p.Name() == name {
 			if !w.Stdlib {
 				std := IsStdlib(p.Path())
 				if std {
@@ -300,15 +306,26 @@ func recvFromSelector(s types.Type) string {
 	return ""
 }
 
-func pkgNameFromExpr(expr *ast.SelectorExpr, parent *loader.PackageInfo) string {
+func pkgNameFromExpr(expr *ast.SelectorExpr, parent *loader.PackageInfo, file *ast.File) (string, string) {
 	s, ok := parent.Selections[expr]
 	if ok {
 		if s.Obj().Pkg() == nil {
-			return ""
+			return "", ""
 		}
-		return s.Obj().Pkg().Name()
+		return s.Obj().Pkg().Name(), s.Obj().Pkg().Path()
 	}
-	return packageName(expr)
+
+	if file != nil {
+		for _, i := range file.Imports {
+			if i.Name != nil {
+				if i.Name.Name == packageName(expr) {
+					return i.Name.Name, strings.Trim(i.Path.Value, "\"")
+				}
+			}
+		}
+	}
+
+	return packageName(expr), ""
 }
 
 func recvAndType(expr *ast.SelectorExpr, parent *loader.PackageInfo) (string, string) {
@@ -333,9 +350,9 @@ func recvAndType(expr *ast.SelectorExpr, parent *loader.PackageInfo) (string, st
 	return typ, recv
 }
 
-func (w *Walker) resolvePkg(parent *loader.PackageInfo, pkgName string) *loader.PackageInfo {
-	if pkgName != parent.Pkg.Name() {
-		return w.FindImport(parent, pkgName)
+func (w *Walker) resolvePkg(parent *loader.PackageInfo, name, path string) *loader.PackageInfo {
+	if path != parent.Pkg.Path() && name != parent.Pkg.Name() {
+		return w.FindImport(parent, name, path)
 	}
 	return parent
 }
