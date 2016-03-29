@@ -10,14 +10,14 @@ import (
 // Result holds final result of this tool.
 type Result struct {
 	SelectorsMap map[string]*Selector
-	Counter      map[Selector]int
+	Counter      map[string]int
 }
 
 // NewResult inits new Result.
 func NewResult() *Result {
 	return &Result{
 		SelectorsMap: make(map[string]*Selector),
-		Counter:      make(map[Selector]int),
+		Counter:      make(map[string]int),
 	}
 }
 
@@ -26,7 +26,7 @@ func (r *Result) Add(sel *Selector) {
 	if _, ok := r.SelectorsMap[sel.String()]; !ok {
 		r.SelectorsMap[sel.String()] = sel
 	}
-	r.Counter[*sel]++
+	r.Counter[sel.String()]++
 }
 
 // PrintPretty prints results to stdout in a pretty table form.
@@ -57,7 +57,7 @@ func (r *Result) PrintPretty() {
 			depth = fmt.Sprintf("%d", sel.Depth)
 			depthInt = fmt.Sprintf("%d", sel.DepthInternal)
 		}
-		count := fmt.Sprintf("%d", r.Counter[*sel])
+		count := fmt.Sprintf("%d", r.Counter[sel.String()])
 		results = append(results, []string{pkg, sel.Recv, sel.Name, sel.Type, count, loc, locCum, depth, depthInt})
 	}
 	for _, v := range results {

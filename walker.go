@@ -19,7 +19,7 @@ type Walker struct {
 	SelectorsMap map[string]*Selector
 	Counter      map[Selector]int
 
-	Visited map[*ast.FuncDecl]bool
+	Visited map[*ast.FuncDecl]*Selector
 }
 
 // NewWalker inits new AST walker.
@@ -43,7 +43,7 @@ func NewWalker(p *loader.Program) *Walker {
 
 		Stdlib: false,
 
-		Visited: make(map[*ast.FuncDecl]bool),
+		Visited: make(map[*ast.FuncDecl]*Selector),
 	}
 }
 
@@ -111,11 +111,11 @@ func (w *Walker) WalkCallExpr(sel *Selector, node ast.Node, pkg *loader.PackageI
 
 	if _, ok := obj.Type().(*types.Signature); ok {
 		fnDecl := w.FindFnNode(pkg, name)
-		// skip recursive calls
-		if w.Visited[fnDecl] {
-			return sel
-		}
 		if fnDecl != nil {
+			// skip recursive calls
+			if _, ok := w.Visited[fnDecl]; ok {
+				return w.Visited[fnDecl]
+			}
 			if sel == nil {
 				loc := w.LOC(fnDecl)
 				sel = NewSelector(pkg, name, "", "", loc)
@@ -159,17 +159,17 @@ func (w *Walker) WalkSelectorExpr(sel *Selector, node ast.Node, parent *loader.P
 			return sel
 		}
 
-		// skip recursive calls
-		if w.Visited[fnDecl] {
-			return sel
-		}
-
 		if sel == nil {
 			loc := w.LOC(fnDecl)
 			typ, recv := recvAndType(expr, parent)
 			sel = NewSelector(pkg, name, recv, typ, loc)
 		} else {
 			sel.IncDepth(internal)
+		}
+
+		// skip recursive calls
+		if _, ok := w.Visited[fnDecl]; ok {
+			return w.Visited[fnDecl]
 		}
 
 		w.processFunc(sel, fnDecl, pkg, name)
@@ -179,7 +179,7 @@ func (w *Walker) WalkSelectorExpr(sel *Selector, node ast.Node, parent *loader.P
 
 func (w *Walker) processFunc(sel *Selector, fnDecl *ast.FuncDecl, pkg *loader.PackageInfo, name string) *Selector {
 	sel.LOCCum += w.LOC(fnDecl)
-	w.Visited[fnDecl] = true
+	w.Visited[fnDecl] = sel
 	w.WalkFnBody(sel, fnDecl, pkg)
 	return sel
 }
