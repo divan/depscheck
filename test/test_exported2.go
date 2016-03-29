@@ -1,11 +1,11 @@
 package test
 
 import (
-	sss "github.com/divan/depscheck/test/sample"
+	"github.com/divan/depscheck/test/sample"
 )
 
 func Xtest() {
-	sss.SampleFunc()
-	var foo sss.Foo
+	xsample.SampleFunc()
+	var foo xsample.Foo
 	foo.Bar()
 }

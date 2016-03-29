@@ -23,10 +23,11 @@ func NewResult() *Result {
 
 // Add adds new selector to the result.
 func (r *Result) Add(sel *Selector) {
-	if _, ok := r.Selectors[sel.ID()]; !ok {
-		r.Selectors[sel.ID()] = sel
+	key := sel.ID()
+	if _, ok := r.Selectors[key]; !ok {
+		r.Selectors[key] = sel
 	}
-	r.Counter[sel.ID()]++
+	r.Counter[key]++
 }
 
 // PrintPretty prints results to stdout in a pretty table form.

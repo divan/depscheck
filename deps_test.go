@@ -13,9 +13,10 @@ func TestExportedFuncs(t *testing.T) {
 	checkSelector(t, result, "xsample.func.SampleFunc", 1, 6, 14, 0, 2)
 
 	result = getResult(t, "test", "test/test_exported2.go")
-	checkCount(t, result, 2)
+	checkCount(t, result, 3)
 	checkSelector(t, result, "xsample.func.SampleFunc", 1, 6, 14, 0, 2)
 	checkSelector(t, result, "xsample.(Foo).method.Bar", 1, 3, 3, 0, 0)
+	checkSelector(t, result, "xsample.var.Foo", 1, 0, 0, 0, 0)
 }
 
 func getResult(t *testing.T, name string, sources ...string) *Result {
