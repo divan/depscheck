@@ -9,22 +9,22 @@ import (
 
 // Result holds final result of this tool.
 type Result struct {
-	SelectorsMap map[string]*Selector
-	Counter      map[string]int
+	Selectors map[string]*Selector
+	Counter   map[string]int
 }
 
 // NewResult inits new Result.
 func NewResult() *Result {
 	return &Result{
-		SelectorsMap: make(map[string]*Selector),
-		Counter:      make(map[string]int),
+		Selectors: make(map[string]*Selector),
+		Counter:   make(map[string]int),
 	}
 }
 
 // Add adds new selector to the result.
 func (r *Result) Add(sel *Selector) {
-	if _, ok := r.SelectorsMap[sel.ID()]; !ok {
-		r.SelectorsMap[sel.ID()] = sel
+	if _, ok := r.Selectors[sel.ID()]; !ok {
+		r.Selectors[sel.ID()] = sel
 	}
 	r.Counter[sel.ID()]++
 }
@@ -69,7 +69,7 @@ func (r *Result) PrintPretty() {
 // All returns all known selectors in result.
 func (r *Result) All() []*Selector {
 	var ret []*Selector
-	for _, sel := range r.SelectorsMap {
+	for _, sel := range r.Selectors {
 		ret = append(ret, sel)
 	}
 	return ret
