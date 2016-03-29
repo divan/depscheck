@@ -43,12 +43,36 @@ func NewWalker(p *loader.Program) *Walker {
 
 		Stdlib: false,
 
-		Selectors:    []*Selector{},
-		SelectorsMap: make(map[string]*Selector),
-		Counter:      make(map[Selector]int),
-
 		Visited: make(map[*ast.FuncDecl]bool),
 	}
+}
+
+// TopWalk walks the initial package, looking only for selectors from imported
+// packages.
+func (w *Walker) TopWalk() *Result {
+	result := NewResult()
+	for _, pkg := range w.P.InitialPackages() {
+		for _, file := range pkg.Files {
+			ast.Inspect(file, func(n ast.Node) bool {
+				if x, ok := n.(*ast.SelectorExpr); ok {
+					pkgName := pkgNameFromExpr(x, pkg)
+
+					// skip funcs/methods of current package
+					if pkgName == pkg.Pkg.Name() {
+						return true
+					}
+
+					sel := w.WalkSelectorExpr(nil, file, pkg, x)
+					if sel != nil && sel.Pkg.Path != pkg.Pkg.Path() {
+						result.Add(sel)
+					}
+					return true
+				}
+				return true
+			})
+		}
+	}
+	return result
 }
 
 // WalkFnBody walks through function body block (node),

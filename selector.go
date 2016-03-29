@@ -23,6 +23,30 @@ type Selector struct {
 	DepthInternal int // depth of nested internal functions calls
 }
 
+// Result holds final result of this tool.
+type Result struct {
+	Selectors    []*Selector
+	SelectorsMap map[string]*Selector
+	Counter      map[Selector]int
+}
+
+// NewResult inits new Result.
+func NewResult() *Result {
+	return &Result{
+		Selectors:    []*Selector{},
+		SelectorsMap: make(map[string]*Selector),
+		Counter:      make(map[Selector]int),
+	}
+}
+
+func (r *Result) Add(sel *Selector) {
+	if _, ok := r.SelectorsMap[sel.String()]; !ok {
+		r.Selectors = append(r.Selectors, sel)
+		r.SelectorsMap[sel.String()] = sel
+	}
+	r.Counter[*sel]++
+}
+
 // String implements Stringer interface for Selector.
 func (s *Selector) String() string {
 	if s.Recv != "" {

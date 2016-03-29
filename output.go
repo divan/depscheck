@@ -15,13 +15,13 @@ func (b ByName) Less(i, j int) bool {
 	return b[i].String() < b[j].String()
 }
 
-func (w *Walker) PrintPretty() {
-	if len(w.Counter) == 0 {
+func (r *Result) PrintPretty() {
+	if len(r.Counter) == 0 {
 		fmt.Println("No external dependencies found in this package")
 		return
 	}
 
-	selectors := w.Selectors
+	selectors := r.Selectors
 	sort.Sort(ByName(selectors))
 
 	table := tablewriter.NewWriter(os.Stdout)
@@ -35,11 +35,14 @@ func (w *Walker) PrintPretty() {
 			lastPkg = sel.Pkg.Name
 			pkg = sel.Pkg.Name
 		}
-		loc := fmt.Sprintf("%d", sel.LOC)
-		locCum := fmt.Sprintf("%d", sel.LOCCum)
-		depth := fmt.Sprintf("%d", sel.Depth)
-		depthInt := fmt.Sprintf("%d", sel.DepthInternal)
-		count := fmt.Sprintf("%d", w.Counter[*sel])
+		var loc, locCum, depth, depthInt string
+		if sel.Type == "func" || sel.Type == "method" {
+			loc = fmt.Sprintf("%d", sel.LOC)
+			locCum = fmt.Sprintf("%d", sel.LOCCum)
+			depth = fmt.Sprintf("%d", sel.Depth)
+			depthInt = fmt.Sprintf("%d", sel.DepthInternal)
+		}
+		count := fmt.Sprintf("%d", r.Counter[*sel])
 		results = append(results, []string{pkg, sel.Recv, sel.Name, sel.Type, count, loc, locCum, depth, depthInt})
 	}
 	for _, v := range results {
