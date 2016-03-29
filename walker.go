@@ -24,12 +24,12 @@ type Walker struct {
 }
 
 // NewWalker inits new AST walker.
-func NewWalker(p *loader.Program) *Walker {
+func NewWalker(p *loader.Program, stdlib bool) *Walker {
 	packages := make(map[string]Package)
 	for _, pkg := range p.InitialPackages() {
 		// prepare map of resolved imports
 		for _, i := range pkg.Pkg.Imports() {
-			if IsStdlib(i.Path()) {
+			if !stdlib && IsStdlib(i.Path()) {
 				continue
 			}
 			packages[i.Name()] = NewPackage(i.Name(), i.Path())
@@ -42,7 +42,7 @@ func NewWalker(p *loader.Program) *Walker {
 		CacheLOC:   make(map[*ast.FuncDecl]int),
 		CacheNodes: make(map[string]*ast.FuncDecl),
 
-		Stdlib: false,
+		Stdlib: stdlib,
 
 		Visited: make(map[*ast.FuncDecl]*Selector),
 	}
