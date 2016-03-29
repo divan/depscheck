@@ -32,12 +32,25 @@ func (s *Selector) String() string {
 }
 
 // NewSelector creates new Selector.
-func NewSelector(pkg *loader.PackageInfo, name string) *Selector {
+func NewSelector(pkg *loader.PackageInfo, name, recv, typ string, loc int) *Selector {
 	return &Selector{
 		Pkg: Package{
 			Name: pkg.Pkg.Name(),
 			Path: pkg.Pkg.Path(),
 		},
 		Name: name,
+
+		Recv: recv,
+		Type: typ,
+
+		LOC: loc,
+	}
+}
+
+func (sel *Selector) IncDepth(internal bool) {
+	if internal {
+		sel.DepthInternal++
+	} else {
+		sel.Depth++
 	}
 }

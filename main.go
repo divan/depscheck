@@ -24,6 +24,10 @@ func main() {
 		for _, file := range pkg.Files {
 			ast.Inspect(file, func(n ast.Node) bool {
 				if x, ok := n.(*ast.SelectorExpr); ok {
+					pkgName := pkgNameFromExpr(x, pkg)
+					if pkgName == pkg.Pkg.Name() {
+						return true
+					}
 					sel := w.WalkSelectorExpr(nil, file, pkg, x)
 					if sel != nil && sel.Pkg.Path != pkg.Pkg.Path() {
 						if _, ok := w.SelectorsMap[sel.String()]; !ok {
