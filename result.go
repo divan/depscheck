@@ -23,10 +23,10 @@ func NewResult() *Result {
 
 // Add adds new selector to the result.
 func (r *Result) Add(sel *Selector) {
-	if _, ok := r.SelectorsMap[sel.String()]; !ok {
-		r.SelectorsMap[sel.String()] = sel
+	if _, ok := r.SelectorsMap[sel.ID()]; !ok {
+		r.SelectorsMap[sel.ID()] = sel
 	}
-	r.Counter[sel.String()]++
+	r.Counter[sel.ID()]++
 }
 
 // PrintPretty prints results to stdout in a pretty table form.
@@ -57,7 +57,7 @@ func (r *Result) PrintPretty() {
 			depth = fmt.Sprintf("%d", sel.Depth)
 			depthInt = fmt.Sprintf("%d", sel.DepthInternal)
 		}
-		count := fmt.Sprintf("%d", r.Counter[sel.String()])
+		count := fmt.Sprintf("%d", r.Counter[sel.ID()])
 		results = append(results, []string{pkg, sel.Recv, sel.Name, sel.Type, count, loc, locCum, depth, depthInt})
 	}
 	for _, v := range results {
@@ -80,5 +80,5 @@ type ByName []*Selector
 func (b ByName) Len() int      { return len(b) }
 func (b ByName) Swap(i, j int) { b[i], b[j] = b[j], b[i] }
 func (b ByName) Less(i, j int) bool {
-	return b[i].String() < b[j].String()
+	return b[i].ID() < b[j].ID()
 }

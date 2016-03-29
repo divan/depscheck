@@ -25,6 +25,21 @@ type Selector struct {
 
 // String implements Stringer interface for Selector.
 func (s *Selector) String() string {
+	var out string
+	if s.Recv != "" {
+		out = fmt.Sprintf("%s.(%s).%s.%s", s.Pkg.Name, s.Recv, s.Type, s.Name)
+	}
+	out = fmt.Sprintf("%s.%s.%s", s.Pkg.Name, s.Type, s.Name)
+
+	if s.Type == "func" || s.Type == "method" {
+		out = fmt.Sprintf("%s LOC: %d, %d, Depth: %d,%d", out, s.LOC, s.LOCCum, s.Depth, s.DepthInternal)
+	}
+
+	return out
+}
+
+// ID generates uniqie string ID for this selector.
+func (s *Selector) ID() string {
 	if s.Recv != "" {
 		return fmt.Sprintf("%s.(%s).%s.%s", s.Pkg.Name, s.Recv, s.Type, s.Name)
 	}
