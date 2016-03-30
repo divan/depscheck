@@ -115,10 +115,16 @@ func (r *Result) Suggestions() {
 		return
 	}
 
+	var hasCandidates bool
 	for _, p := range r.PackagesStats() {
 		if p.CanBeAvoided() {
 			fmt.Printf("Package %s (%s) is a good candidate for removing from dependencies.\n", p.Name, p.Path)
 			fmt.Printf("  Only %d LOC used, in %d calls, with %d level of nesting\n", p.LOCCum, p.DepsCount, p.DepthInternal)
+			hasCandidates = true
 		}
+	}
+
+	if !hasCandidates {
+		fmt.Println("Cool, looks like your dependencies are sane.")
 	}
 }
