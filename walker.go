@@ -119,9 +119,15 @@ func (w *Walker) WalkObject(pkg *loader.PackageInfo, obj types.Object) *Selector
 	loc := w.LOC(fnDecl)
 	sel := NewSelector(pkg.Pkg, fnDecl.Name.Name, recv, typ, loc)
 
+	w.Visited[fnDecl] = sel
 	deps := w.WalkFuncBody(pkg, fnDecl)
-	sel.Deps = append(sel.Deps, deps...)
+	for _, dep := range deps {
+		if _, ok := w.Visited[fnDecl]; !ok {
+			sel.Deps = append(sel.Deps, dep)
+		}
+	}
 
+	// update visited Selector with deps
 	w.Visited[fnDecl] = sel
 
 	return sel
