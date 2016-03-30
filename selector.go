@@ -158,7 +158,10 @@ func (deps Deps) HasRecursion(s *Selector) bool {
 		}
 
 		if dep.Deps != nil {
-			return dep.Deps.HasRecursion(s)
+			has := dep.Deps.HasRecursion(s)
+			if has {
+				return true
+			}
 		}
 	}
 	return false
