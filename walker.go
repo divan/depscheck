@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"go/ast"
 	"go/types"
 	"golang.org/x/tools/go/loader"
@@ -61,49 +60,55 @@ func (w *Walker) WalkPackage(pkg *loader.PackageInfo, result *Result) {
 			continue
 		}
 
-		/*
-			if !obj.Exported() {
-				continue
-			}
-		*/
+		if !obj.Exported() {
+			continue
+		}
 
-		switch obj.Type().(type) {
-		case *types.Signature: // func or method
-			depPkg := w.P.Package(obj.Pkg().Path())
-			pkg := depPkg.Pkg
-			if !w.Stdlib && IsStdlib(pkg.Path()) {
-				fmt.Println("Skipping", pkg.Path())
-				continue
-			}
-			if sel := w.WalkFunc(nil, depPkg, obj.Name()); sel != nil {
-				result.Add(sel)
-			}
-		default:
-			pkg := obj.Pkg()
-			if !w.Stdlib && IsStdlib(pkg.Path()) {
-				fmt.Println("Skipping", pkg.Path())
-				continue
-			}
+		depPkg := w.P.Package(obj.Pkg().Path())
 
-			sel := NewSelector(obj.Pkg(), obj.Name(), "", "var", 0)
+		if sel := w.WalkObject(depPkg, obj); sel != nil {
 			result.Add(sel)
 		}
 	}
 }
 
-func (w *Walker) WalkFunc(sel *Selector, pkg *loader.PackageInfo, name string) *Selector {
-	if !w.Stdlib && IsStdlib(pkg.Pkg.Path()) {
-		fmt.Println("Skipping", pkg.Pkg.Path())
-		return sel
+func (w *Walker) WalkObject(pkg *loader.PackageInfo, obj types.Object) *Selector {
+	if obj == nil {
+		return nil
 	}
-	decl, def := w.FindDefDecl(pkg, name)
+
+	if !w.Stdlib && IsStdlib(pkg.Pkg.Path()) {
+		return nil
+	}
+
+	decl, def := w.FindDefDecl(pkg, obj)
 	if def == nil || decl == nil {
-		return sel
+		return nil
+	}
+
+	var typ, recv string
+
+	switch d := def.(type) {
+	case *types.Const:
+		typ = "const"
+	case *types.Var:
+		if d.IsField() {
+			return nil
+		}
+		typ = "var"
+	case *types.Func:
+		typ = "func"
+		if r := d.Type().(*types.Signature).Recv(); r != nil {
+			typ = "method"
+			recv = r.Type().String()
+		}
+	case *types.TypeName:
+		typ = "type"
 	}
 
 	fnDecl := w.FnDecl(pkg, decl)
 	if fnDecl == nil {
-		return sel
+		return NewSelector(pkg.Pkg, obj.Name(), recv, typ, 0)
 	}
 
 	if sel, ok := w.Visited[fnDecl]; ok {
@@ -111,49 +116,55 @@ func (w *Walker) WalkFunc(sel *Selector, pkg *loader.PackageInfo, name string) *
 	}
 
 	loc := w.LOC(fnDecl)
+	sel := NewSelector(pkg.Pkg, fnDecl.Name.Name, recv, typ, loc)
 
-	typ := "func"
-	if fnDecl.Recv != nil {
-		typ = "method"
-	}
-
-	s := NewSelector(pkg.Pkg, fnDecl.Name.Name, "", typ, loc)
-	if sel != nil {
-		sel.Append(s)
-	} else {
-		sel = s
-	}
+	deps := w.WalkFuncBody(pkg, fnDecl)
+	sel.Deps = append(sel.Deps, deps...)
 
 	w.Visited[fnDecl] = sel
-	return w.WalkFuncBody(sel, pkg, fnDecl)
+
+	return sel
 }
 
-func (w *Walker) WalkFuncBody(sel *Selector, pkg *loader.PackageInfo, node *ast.FuncDecl) *Selector {
+func (w *Walker) WalkFuncBody(pkg *loader.PackageInfo, node *ast.FuncDecl) Deps {
+	var deps Deps
 	ast.Inspect(node, func(n ast.Node) bool {
 		switch expr := n.(type) {
 		case *ast.CallExpr:
 			switch expr := expr.Fun.(type) {
 			case *ast.Ident:
-				name := expr.Name
-				sel = w.WalkFunc(sel, pkg, name)
+				obj := w.LookupObject(pkg, expr)
+				s := w.WalkObject(pkg, obj)
+				if s != nil {
+					deps.Append(s)
+				}
 				return false
 			case *ast.SelectorExpr:
-				sel = w.WalkFunc(sel, pkg, expr.Sel.Name)
+				obj, ok := pkg.Uses[expr.Sel]
+				if !ok {
+					return false
+				}
+
+				depPkg := w.P.Package(obj.Pkg().Path())
+				s := w.WalkObject(depPkg, obj)
+				if s != nil {
+					deps.Append(s)
+				}
 				return false
 			}
 			return false
 		}
 		return true
 	})
-	return sel
+	return deps
 }
 
-func (w *Walker) FindDefDecl(pkg *loader.PackageInfo, name string) (*ast.Ident, types.Object) {
+func (w *Walker) FindDefDecl(pkg *loader.PackageInfo, obj types.Object) (*ast.Ident, types.Object) {
 	for decl, def := range pkg.Defs {
-		if def == nil || name == "" {
+		if def == nil || obj == nil {
 			continue
 		}
-		if def.Name() == name {
+		if def == obj {
 			return decl, def
 		}
 	}
@@ -204,4 +215,14 @@ func (w *Walker) LOC(node *ast.FuncDecl) int {
 	w.CacheLOC[node] = lines
 
 	return lines
+}
+
+func (w *Walker) LookupObject(pkg *loader.PackageInfo, expr *ast.Ident) types.Object {
+	for decl, def := range pkg.Defs {
+		if decl == expr {
+			return def
+		}
+	}
+
+	return nil
 }

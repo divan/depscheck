@@ -61,11 +61,13 @@ func NewSelector(pkg *types.Package, name, recv, typ string, loc int) *Selector 
 	}
 }
 
-func (sel *Selector) Append(s *Selector) {
-	for _, d := range sel.Deps {
+type Deps []*Selector
+
+func (deps *Deps) Append(s *Selector) {
+	for _, d := range *deps {
 		if d.ID() == s.ID() {
 			return
 		}
 	}
-	sel.Deps = append(sel.Deps, s)
+	*deps = append(*deps, s)
 }

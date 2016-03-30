@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"sort"
+	"strings"
 )
 
 // Result holds final result of this tool.
@@ -65,6 +66,8 @@ func (r *Result) PrintPretty() {
 		table.Append(v)
 	}
 	table.Render() // Send output
+
+	//r.PrintDeps()
 }
 
 // All returns all known selectors in result.
@@ -74,6 +77,12 @@ func (r *Result) All() []*Selector {
 		ret = append(ret, sel)
 	}
 	return ret
+}
+
+func (r *Result) PrintDeps() {
+	for _, s := range r.All() {
+		s.PrintDeps()
+	}
 }
 
 // PackageStats returns stats by packages in all selectors.
@@ -119,7 +128,6 @@ func (sel *Selector) Depth() int {
 
 	ret := 0
 	for _, dep := range sel.Deps {
-		fmt.Println(dep)
 		if dep.Pkg != sel.Pkg {
 			ret++
 			ret += dep.Depth()
@@ -147,6 +155,17 @@ func (sel *Selector) DepthInternal() int {
 
 func (sel *Selector) IsFunc() bool {
 	return sel.Type == "func" || sel.Type == "method"
+}
+
+func (sel *Selector) PrintDeps() {
+	sel.printDeps(0)
+}
+
+func (sel *Selector) printDeps(depth int) {
+	fmt.Println(strings.Repeat("  ", depth), sel.Pkg.Name+"."+sel.Name)
+	for _, dep := range sel.Deps {
+		dep.printDeps(depth + 2)
+	}
 }
 
 type ByName []*Selector

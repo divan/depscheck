@@ -9,7 +9,8 @@ func TestExportedFuncs(t *testing.T) {
 	var result *Result
 
 	result = getResult(t, "test", "test/test_exported.go")
-	checkCount(t, result, 1)
+	checkCount(t, result, 2)
+	checkSelector(t, result, "xsample.var.Sample", 1, 0, 0, 0, 0)
 	checkSelector(t, result, "xsample.func.SampleFunc", 1, 6, 14, 0, 2)
 
 	result = getResult(t, "test", "test/test_exported2.go")
@@ -55,13 +56,13 @@ func checkSelector(t *testing.T, r *Result, fn string, count, loc, loccum, depth
 	if sel.LOC != loc {
 		t.Fatalf("Expected to func '%s' to have %d LOC, but got %d", fn, loc, sel.LOC)
 	}
-	if sel.LOCCum != loccum {
+	if sel.LOCCum() != loccum {
 		t.Fatalf("Expected to func '%s' to have %d Cumulative LOC, but got %d", fn, loccum, sel.LOCCum)
 	}
-	if sel.Depth != depth {
+	if sel.Depth() != depth {
 		t.Fatalf("Expected to func '%s' to have Depth %d, but got %d", fn, depth, sel.Depth)
 	}
-	if sel.DepthInternal != depthint {
+	if sel.DepthInternal() != depthint {
 		t.Fatalf("Expected to func '%s' to have %d Depth Internal, but got %d", fn, depthint, sel.DepthInternal)
 	}
 }
