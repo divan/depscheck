@@ -219,6 +219,7 @@ func (w *Walker) LOC(node *ast.FuncDecl) int {
 	body := node.Body
 	if body == nil {
 		w.CacheLOC[node] = 0
+		return 0
 	}
 
 	start := w.P.Fset.Position(body.Lbrace)

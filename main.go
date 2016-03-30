@@ -40,7 +40,13 @@ func main() {
 		result.PrintStats()
 		result.PrintPackagesStats()
 	}
-	result.Suggestions()
+
+	// Do not report suggestions in stdlib mode.
+	// Stlib is smarter than this tool.
+	if !*stdlib {
+		result.Suggestions()
+	}
+
 	if !*verbose {
 		fmt.Println("Run with -v option to see detailed stats for dependencies.")
 	}
