@@ -34,7 +34,7 @@ func main() {
 	if *verbose {
 		result.PrintPretty()
 	}
-	result.LinterOutput(os.Stdout)
+	//result.LinterOutput(os.Stdout)
 }
 
 func Usage() {

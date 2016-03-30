@@ -5,20 +5,17 @@ import (
 	"go/ast"
 	"go/types"
 	"golang.org/x/tools/go/loader"
-	"strings"
 )
 
+// Walker holds all information needed during walking
+// and analyzing AST source tree.
 type Walker struct {
 	P          *loader.Program
 	Packages   map[string]Package
 	CacheLOC   map[*ast.FuncDecl]int
-	CacheNodes map[string]*ast.FuncDecl
+	CacheNodes map[*ast.Ident]*ast.FuncDecl
 
 	Stdlib bool
-
-	Selectors    []*Selector
-	SelectorsMap map[string]*Selector
-	Counter      map[Selector]int
 
 	Visited map[*ast.FuncDecl]*Selector
 }
@@ -40,7 +37,7 @@ func NewWalker(p *loader.Program, stdlib bool) *Walker {
 		P:          p,
 		Packages:   packages,
 		CacheLOC:   make(map[*ast.FuncDecl]int),
-		CacheNodes: make(map[string]*ast.FuncDecl),
+		CacheNodes: make(map[*ast.Ident]*ast.FuncDecl),
 
 		Stdlib: stdlib,
 
@@ -53,39 +50,97 @@ func NewWalker(p *loader.Program, stdlib bool) *Walker {
 func (w *Walker) TopWalk() *Result {
 	result := NewResult()
 	for _, pkg := range w.P.InitialPackages() {
-		for _, file := range pkg.Files {
-			ast.Inspect(file, func(n ast.Node) bool {
-				if x, ok := n.(*ast.SelectorExpr); ok {
-					pkgName, pkgPath := pkgNameFromExpr(x, pkg, file)
-
-					// skip funcs/methods of current package
-					if pkgName == pkg.Pkg.Name() || pkgPath == pkg.Pkg.Path() {
-						return true
-					}
-
-					sel := w.WalkSelectorExpr(nil, file, pkg, x)
-					if sel != nil && sel.Pkg.Path != pkg.Pkg.Path() {
-						result.Add(sel)
-					}
-					return true
-				}
-				return true
-			})
-		}
+		w.WalkPackage(pkg, result)
 	}
 	return result
 }
 
-// WalkFnBody walks through function body block (node),
-// looking for internal and external dependencies expressions.
-func (w *Walker) WalkFnBody(sel *Selector, node *ast.FuncDecl, pkg *loader.PackageInfo) *Selector {
+func (w *Walker) WalkPackage(pkg *loader.PackageInfo, result *Result) {
+	for _, obj := range pkg.Uses {
+		if obj.Pkg() == nil || obj.Pkg() == pkg.Pkg {
+			continue
+		}
+
+		/*
+			if !obj.Exported() {
+				continue
+			}
+		*/
+
+		switch obj.Type().(type) {
+		case *types.Signature: // func or method
+			depPkg := w.P.Package(obj.Pkg().Path())
+			pkg := depPkg.Pkg
+			if !w.Stdlib && IsStdlib(pkg.Path()) {
+				fmt.Println("Skipping", pkg.Path())
+				continue
+			}
+			if sel := w.WalkFunc(nil, depPkg, obj.Name()); sel != nil {
+				result.Add(sel)
+			}
+		default:
+			pkg := obj.Pkg()
+			if !w.Stdlib && IsStdlib(pkg.Path()) {
+				fmt.Println("Skipping", pkg.Path())
+				continue
+			}
+
+			sel := NewSelector(obj.Pkg(), obj.Name(), "", "var", 0)
+			result.Add(sel)
+		}
+	}
+}
+
+func (w *Walker) WalkFunc(sel *Selector, pkg *loader.PackageInfo, name string) *Selector {
+	if !w.Stdlib && IsStdlib(pkg.Pkg.Path()) {
+		fmt.Println("Skipping", pkg.Pkg.Path())
+		return sel
+	}
+	decl, def := w.FindDefDecl(pkg, name)
+	if def == nil || decl == nil {
+		return sel
+	}
+
+	fnDecl := w.FnDecl(pkg, decl)
+	if fnDecl == nil {
+		return sel
+	}
+
+	if sel, ok := w.Visited[fnDecl]; ok {
+		return sel
+	}
+
+	loc := w.LOC(fnDecl)
+
+	typ := "func"
+	if fnDecl.Recv != nil {
+		typ = "method"
+	}
+
+	s := NewSelector(pkg.Pkg, fnDecl.Name.Name, "", typ, loc)
+	if sel != nil {
+		sel.Append(s)
+	} else {
+		sel = s
+	}
+
+	w.Visited[fnDecl] = sel
+	return w.WalkFuncBody(sel, pkg, fnDecl)
+}
+
+func (w *Walker) WalkFuncBody(sel *Selector, pkg *loader.PackageInfo, node *ast.FuncDecl) *Selector {
 	ast.Inspect(node, func(n ast.Node) bool {
-		switch x := n.(type) {
-		case *ast.SelectorExpr:
-			sel = w.WalkSelectorExpr(sel, node, pkg, x)
-			return false
+		switch expr := n.(type) {
 		case *ast.CallExpr:
-			sel = w.WalkCallExpr(sel, node, pkg, x)
+			switch expr := expr.Fun.(type) {
+			case *ast.Ident:
+				name := expr.Name
+				sel = w.WalkFunc(sel, pkg, name)
+				return false
+			case *ast.SelectorExpr:
+				sel = w.WalkFunc(sel, pkg, expr.Sel.Name)
+				return false
+			}
 			return false
 		}
 		return true
@@ -93,151 +148,31 @@ func (w *Walker) WalkFnBody(sel *Selector, node *ast.FuncDecl, pkg *loader.Packa
 	return sel
 }
 
-// WalkCallExpr walks down through CallExpr AST-node. It may represent both
-// local and external dependency call, so handle both.
-func (w *Walker) WalkCallExpr(sel *Selector, node ast.Node, pkg *loader.PackageInfo, expr *ast.CallExpr) *Selector {
-	var name string
-	switch expr := expr.Fun.(type) {
-	case *ast.Ident:
-		name = expr.Name
-	case *ast.SelectorExpr:
-		return w.WalkSelectorExpr(sel, node, pkg, expr)
-	}
-
-	// lookup this object in package
-	obj := w.FindObject(pkg, name)
-	if obj == nil {
-		return sel
-	}
-
-	if _, ok := obj.Type().(*types.Signature); ok {
-		fnDecl := w.FindFnNode(pkg, name)
-		if fnDecl != nil {
-			// skip recursive calls
-			if _, ok := w.Visited[fnDecl]; ok {
-				return w.Visited[fnDecl]
-			}
-			if sel == nil {
-				loc := w.LOC(fnDecl)
-				sel = NewSelector(pkg, name, "", "", loc)
-			}
-			w.processFunc(sel, fnDecl, pkg, name)
-			sel.DepthInternal++
+func (w *Walker) FindDefDecl(pkg *loader.PackageInfo, name string) (*ast.Ident, types.Object) {
+	for decl, def := range pkg.Defs {
+		if def == nil || name == "" {
+			continue
+		}
+		if def.Name() == name {
+			return decl, def
 		}
 	}
-	return sel
+
+	return nil, nil
 }
 
-// WalkSelectorExpr walks throug SelecorExpr node.
-func (w *Walker) WalkSelectorExpr(sel *Selector, node ast.Node, parent *loader.PackageInfo, expr *ast.SelectorExpr) *Selector {
-	var pkgName, pkgPath string
-	if file, ok := node.(*ast.File); ok {
-		pkgName, pkgPath = pkgNameFromExpr(expr, parent, file)
-	} else {
-		pkgName, pkgPath = pkgNameFromExpr(expr, parent, nil)
-	}
-	if pkgName == "" && pkgPath == "" {
-		return nil
-	}
-
-	pkg := w.resolvePkg(parent, pkgName, pkgPath)
-	if pkg == nil {
-		return sel
-	}
-	name := expr.Sel.Name
-
-	// lookup this object in package
-	obj := w.getObject(expr, parent, pkg, name)
-	if obj == nil {
-		return sel
-	}
-
-	// if name of current package(parent) and pkg of selector are equal, it's internal func/method call
-	internal := (pkgName == parent.Pkg.Name())
-
-	if isField(obj) {
-		_, recv := recvAndType(expr, parent)
-		typ := "var"
-		sel = NewSelector(pkg, name, recv, typ, 0)
-	} else if isFunc(obj) {
-		fnDecl := w.FindFnNode(pkg, name)
-		if fnDecl == nil {
-			return sel
-		}
-
-		if sel == nil {
-			loc := w.LOC(fnDecl)
-			typ, recv := recvAndType(expr, parent)
-			sel = NewSelector(pkg, name, recv, typ, loc)
-		} else {
-			sel.IncDepth(internal)
-		}
-
-		// skip recursive calls
-		if _, ok := w.Visited[fnDecl]; ok {
-			return w.Visited[fnDecl]
-		}
-
-		w.processFunc(sel, fnDecl, pkg, name)
-	}
-	return sel
-}
-
-func (w *Walker) processFunc(sel *Selector, fnDecl *ast.FuncDecl, pkg *loader.PackageInfo, name string) *Selector {
-	sel.LOCCum += w.LOC(fnDecl)
-	w.Visited[fnDecl] = sel
-	w.WalkFnBody(sel, fnDecl, pkg)
-	return sel
-}
-
-func (w *Walker) FindObject(pkg *loader.PackageInfo, name string) types.Object {
-	scope := pkg.Pkg.Scope()
-	return scope.Lookup(name)
-}
-
-func (w *Walker) FindFnNode(pkg *loader.PackageInfo, fnName string) *ast.FuncDecl {
-	var (
-		node *ast.FuncDecl
-		ok   bool
-	)
-	qName := fmt.Sprintf("%s.%s", pkg.Pkg.Path(), fnName)
-	node, ok = w.CacheNodes[qName]
-	if ok {
-		return node
+func (w *Walker) FnDecl(pkg *loader.PackageInfo, decl *ast.Ident) *ast.FuncDecl {
+	if fn, ok := w.CacheNodes[decl]; ok {
+		return fn
 	}
 	for _, f := range pkg.Files {
-		ast.Inspect(f, func(n ast.Node) bool {
-			switch x := n.(type) {
-			case *ast.FuncDecl:
-				if x.Name.Name == fnName {
-					if x.Body == nil {
-						return false
-						w.CacheNodes[qName] = nil
-					}
-					node = x
-					w.CacheNodes[qName] = x
-					return false
+		for _, d := range f.Decls {
+			if fnDecl, ok := d.(*ast.FuncDecl); ok {
+				if decl == fnDecl.Name {
+					w.CacheNodes[decl] = fnDecl
+					return fnDecl
 				}
 			}
-			return true
-		})
-		if node != nil {
-			return node
-		}
-	}
-	return nil
-}
-
-func (w *Walker) FindImport(pkg *loader.PackageInfo, name, path string) *loader.PackageInfo {
-	for _, p := range pkg.Pkg.Imports() {
-		if p.Path() == path || p.Name() == name {
-			if !w.Stdlib {
-				std := IsStdlib(p.Path())
-				if std {
-					return nil
-				}
-			}
-			return w.P.Package(p.Path())
 		}
 	}
 	return nil
@@ -269,97 +204,4 @@ func (w *Walker) LOC(node *ast.FuncDecl) int {
 	w.CacheLOC[node] = lines
 
 	return lines
-}
-
-// packageName returns qualified package name from SelectorExpr.
-func packageName(x *ast.SelectorExpr) string {
-	n, ok := x.X.(*ast.Ident)
-	if !ok {
-		return ""
-	}
-
-	return n.Name
-}
-
-func isFunc(obj types.Object) bool {
-	_, ok := obj.Type().(*types.Signature)
-	return ok
-}
-
-func isField(obj types.Object) bool {
-	// TODO: add pointers support
-	_, ok := obj.Type().(*types.Named)
-	return ok
-}
-
-func recvFromSelector(s types.Type) string {
-	if recv, ok := s.(*types.Named); ok {
-		return recv.Obj().Name()
-	}
-	if recv, ok := s.(*types.Pointer); ok {
-		named, ok := recv.Elem().(*types.Named)
-		if !ok {
-			return ""
-		}
-		return fmt.Sprintf("*%s", named.Obj().Name())
-	}
-	return ""
-}
-
-func pkgNameFromExpr(expr *ast.SelectorExpr, parent *loader.PackageInfo, file *ast.File) (string, string) {
-	s, ok := parent.Selections[expr]
-	if ok {
-		if s.Obj().Pkg() == nil {
-			return "", ""
-		}
-		return s.Obj().Pkg().Name(), s.Obj().Pkg().Path()
-	}
-
-	if file != nil {
-		for _, i := range file.Imports {
-			if i.Name != nil {
-				if i.Name.Name == packageName(expr) {
-					return i.Name.Name, strings.Trim(i.Path.Value, "\"")
-				}
-			}
-		}
-	}
-
-	return packageName(expr), ""
-}
-
-func recvAndType(expr *ast.SelectorExpr, parent *loader.PackageInfo) (string, string) {
-	typ := "func"
-	recv := ""
-
-	s, ok := parent.Selections[expr]
-	if ok {
-		switch s.Kind() {
-		case types.MethodVal:
-			recv = recvFromSelector(s.Recv())
-			typ = "func"
-			if recv != "" {
-				typ = "method"
-			}
-		case types.FieldVal:
-			typ = "field"
-		case types.MethodExpr:
-			typ = "func"
-		}
-	}
-	return typ, recv
-}
-
-func (w *Walker) resolvePkg(parent *loader.PackageInfo, name, path string) *loader.PackageInfo {
-	if path != parent.Pkg.Path() && name != parent.Pkg.Name() {
-		return w.FindImport(parent, name, path)
-	}
-	return parent
-}
-
-func (w *Walker) getObject(expr *ast.SelectorExpr, parent, pkg *loader.PackageInfo, name string) types.Object {
-	if s, ok := parent.Selections[expr]; ok {
-		return s.Obj()
-	}
-	return w.FindObject(pkg, name)
 }

@@ -10,6 +10,14 @@ type Package struct {
 	Path string
 }
 
+// NewPackage creates new Package.
+func NewPackage(name, path string) Package {
+	return Package{
+		Name: name,
+		Path: path,
+	}
+}
+
 // PackageStat holds stats about dependencies in a given package.
 type PackageStat struct {
 	*Package
@@ -19,14 +27,6 @@ type PackageStat struct {
 
 	LOCCum               int
 	Depth, DepthInternal int
-}
-
-// NewPackage creates new Package.
-func NewPackage(name, path string) Package {
-	return Package{
-		Name: name,
-		Path: path,
-	}
 }
 
 // NewPackageStat creates new PackageStat.

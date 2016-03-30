@@ -37,7 +37,6 @@ func (r *Result) PrintPretty() {
 		fmt.Println("No external dependencies found in this package")
 		return
 	}
-
 	selectors := r.All()
 	sort.Sort(ByName(selectors))
 
@@ -55,9 +54,9 @@ func (r *Result) PrintPretty() {
 		var loc, locCum, depth, depthInt string
 		if sel.Type == "func" || sel.Type == "method" {
 			loc = fmt.Sprintf("%d", sel.LOC)
-			locCum = fmt.Sprintf("%d", sel.LOCCum)
-			depth = fmt.Sprintf("%d", sel.Depth)
-			depthInt = fmt.Sprintf("%d", sel.DepthInternal)
+			locCum = fmt.Sprintf("%d", sel.LOCCum())
+			depth = fmt.Sprintf("%d", sel.Depth())
+			depthInt = fmt.Sprintf("%d", sel.DepthInternal())
 		}
 		count := fmt.Sprintf("%d", r.Counter[sel.ID()])
 		results = append(results, []string{pkg, sel.Recv, sel.Name, sel.Type, count, loc, locCum, depth, depthInt})
@@ -86,9 +85,9 @@ func (r *Result) PackagesStats() []*PackageStat {
 		}
 		pkgs[sel.Pkg].DepsCount++
 		pkgs[sel.Pkg].DepsCallsCount += r.Counter[sel.ID()]
-		pkgs[sel.Pkg].LOCCum += sel.LOCCum
-		pkgs[sel.Pkg].Depth += sel.Depth
-		pkgs[sel.Pkg].DepthInternal += sel.DepthInternal
+		pkgs[sel.Pkg].LOCCum += sel.LOCCum()
+		pkgs[sel.Pkg].Depth += sel.Depth()
+		pkgs[sel.Pkg].DepthInternal += sel.DepthInternal()
 
 	}
 
@@ -98,6 +97,56 @@ func (r *Result) PackagesStats() []*PackageStat {
 	}
 	sort.Sort(ByPackageName(ret))
 	return ret
+}
+
+func (sel *Selector) LOCCum() int {
+	if !sel.IsFunc() {
+		return 0
+	}
+
+	ret := sel.LOC
+	for _, dep := range sel.Deps {
+		ret += dep.LOCCum()
+	}
+
+	return ret
+}
+
+func (sel *Selector) Depth() int {
+	if !sel.IsFunc() {
+		return 0
+	}
+
+	ret := 0
+	for _, dep := range sel.Deps {
+		fmt.Println(dep)
+		if dep.Pkg != sel.Pkg {
+			ret++
+			ret += dep.Depth()
+		}
+	}
+
+	return ret
+}
+
+func (sel *Selector) DepthInternal() int {
+	if !sel.IsFunc() {
+		return 0
+	}
+
+	ret := 0
+	for _, dep := range sel.Deps {
+		if dep.Pkg == sel.Pkg {
+			ret++
+			ret += dep.DepthInternal()
+		}
+	}
+
+	return ret
+}
+
+func (sel *Selector) IsFunc() bool {
+	return sel.Type == "func" || sel.Type == "method"
 }
 
 type ByName []*Selector

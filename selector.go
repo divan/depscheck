@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"golang.org/x/tools/go/loader"
+	"go/types"
 )
 
 // Selector represents Go language selector (x.f),
@@ -17,10 +17,9 @@ type Selector struct {
 	Recv string
 
 	// Applies for functions
-	LOC           int // actual Lines Of Code
-	LOCCum        int // cumulative Lines Of Code
-	Depth         int // depth of nested external functions calls
-	DepthInternal int // depth of nested internal functions calls
+	LOC int // actual Lines Of Code
+
+	Deps []*Selector
 }
 
 // String implements Stringer interface for Selector.
@@ -32,7 +31,7 @@ func (s *Selector) String() string {
 	out = fmt.Sprintf("%s.%s.%s", s.Pkg.Name, s.Type, s.Name)
 
 	if s.Type == "func" || s.Type == "method" {
-		out = fmt.Sprintf("%s LOC: %d, %d, Depth: %d,%d", out, s.LOC, s.LOCCum, s.Depth, s.DepthInternal)
+		out = fmt.Sprintf("%s LOC: %d, %d, Depth: %d,%d", out, s.LOC, s.LOCCum(), s.Depth(), s.DepthInternal())
 	}
 
 	return out
@@ -47,11 +46,11 @@ func (s *Selector) ID() string {
 }
 
 // NewSelector creates new Selector.
-func NewSelector(pkg *loader.PackageInfo, name, recv, typ string, loc int) *Selector {
+func NewSelector(pkg *types.Package, name, recv, typ string, loc int) *Selector {
 	return &Selector{
 		Pkg: Package{
-			Name: pkg.Pkg.Name(),
-			Path: pkg.Pkg.Path(),
+			Name: pkg.Name(),
+			Path: pkg.Path(),
 		},
 		Name: name,
 
@@ -62,10 +61,11 @@ func NewSelector(pkg *loader.PackageInfo, name, recv, typ string, loc int) *Sele
 	}
 }
 
-func (sel *Selector) IncDepth(internal bool) {
-	if internal {
-		sel.DepthInternal++
-	} else {
-		sel.Depth++
+func (sel *Selector) Append(s *Selector) {
+	for _, d := range sel.Deps {
+		if d.ID() == s.ID() {
+			return
+		}
 	}
+	sel.Deps = append(sel.Deps, s)
 }
