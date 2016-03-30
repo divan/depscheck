@@ -3,10 +3,8 @@ package main
 import (
 	"fmt"
 	"github.com/olekukonko/tablewriter"
-	"io"
 	"os"
 	"sort"
-	"strings"
 )
 
 // Result holds final result of this tool.
@@ -32,14 +30,13 @@ func (r *Result) Add(sel *Selector) {
 	r.Counter[key]++
 }
 
-// PrintPretty prints results to stdout in a pretty table form.
-func (r *Result) PrintPretty() {
+// PrintStats prints results to stdout in a pretty table form.
+func (r *Result) PrintStats() {
 	if len(r.Counter) == 0 {
-		fmt.Println("No external dependencies found in this package")
 		return
 	}
 	selectors := r.All()
-	sort.Sort(ByName(selectors))
+	sort.Sort(ByID(selectors))
 
 	table := tablewriter.NewWriter(os.Stdout)
 	table.SetHeader([]string{"Pkg", "Recv", "Name", "Type", "Count", "LOC", "LOCCum", "Depth", "DepthInt"})
@@ -66,8 +63,31 @@ func (r *Result) PrintPretty() {
 		table.Append(v)
 	}
 	table.Render() // Send output
+}
 
-	//r.PrintDeps()
+// PrintPackagesStats prints package stats to stdout in a pretty table form.
+func (r *Result) PrintPackagesStats() {
+	stats := r.PackagesStats()
+	if len(stats) == 0 {
+		return
+	}
+
+	table := tablewriter.NewWriter(os.Stdout)
+	table.SetHeader([]string{"Pkg", "Path", "Count", "Calls", "LOCCum", "Depth", "DepthInt"})
+
+	var results [][]string
+	for _, stat := range stats {
+		count := fmt.Sprintf("%d", stat.DepsCount)
+		callsCount := fmt.Sprintf("%d", stat.DepsCallsCount)
+		loc := fmt.Sprintf("%d", stat.LOCCum)
+		depth := fmt.Sprintf("%d", stat.Depth)
+		depthInt := fmt.Sprintf("%d", stat.DepthInternal)
+		results = append(results, []string{stat.Name, stat.Path, count, callsCount, loc, depth, depthInt})
+	}
+	for _, v := range results {
+		table.Append(v)
+	}
+	table.Render() // Send output
 }
 
 // All returns all known selectors in result.
@@ -85,118 +105,19 @@ func (r *Result) PrintDeps() {
 	}
 }
 
-// PackageStats returns stats by packages in all selectors.
-func (r *Result) PackagesStats() []*PackageStat {
-	pkgs := make(map[Package]*PackageStat)
-	for _, sel := range r.Selectors {
-		if _, ok := pkgs[sel.Pkg]; !ok {
-			pkgs[sel.Pkg] = NewPackageStat(sel.Pkg)
-		}
-		pkgs[sel.Pkg].DepsCount++
-		pkgs[sel.Pkg].DepsCallsCount += r.Counter[sel.ID()]
-		pkgs[sel.Pkg].LOCCum += sel.LOCCum()
-		pkgs[sel.Pkg].Depth += sel.Depth()
-		pkgs[sel.Pkg].DepthInternal += sel.DepthInternal()
-
-	}
-
-	var ret []*PackageStat
-	for _, stat := range pkgs {
-		ret = append(ret, stat)
-	}
-	sort.Sort(ByPackageName(ret))
-	return ret
-}
-
-func (sel *Selector) LOCCum() int {
-	if !sel.IsFunc() {
-		return 0
-	}
-
-	ret := sel.LOC
-	for _, dep := range sel.Deps {
-		ret += dep.LOCCum()
-	}
-
-	return ret
-}
-
-func (sel *Selector) Depth() int {
-	if !sel.IsFunc() {
-		return 0
-	}
-
-	ret := 0
-	for _, dep := range sel.Deps {
-		if dep.Pkg != sel.Pkg {
-			ret++
-			ret += dep.Depth()
-		}
-	}
-
-	return ret
-}
-
-func (sel *Selector) DepthInternal() int {
-	if !sel.IsFunc() {
-		return 0
-	}
-
-	ret := 0
-	for _, dep := range sel.Deps {
-		if dep.Pkg == sel.Pkg {
-			ret++
-			ret += dep.DepthInternal()
-		}
-	}
-
-	return ret
-}
-
-func (sel *Selector) IsFunc() bool {
-	return sel.Type == "func" || sel.Type == "method"
-}
-
-func (sel *Selector) PrintDeps() {
-	sel.printDeps(0)
-}
-
-func (sel *Selector) printDeps(depth int) {
-	fmt.Println(strings.Repeat("  ", depth), sel.Pkg.Name+"."+sel.Name)
-	for _, dep := range sel.Deps {
-		dep.printDeps(depth + 2)
-	}
-}
-
-type ByName []*Selector
-
-func (b ByName) Len() int      { return len(b) }
-func (b ByName) Swap(i, j int) { b[i], b[j] = b[j], b[i] }
-func (b ByName) Less(i, j int) bool {
-	return b[i].ID() < b[j].ID()
-}
-
-type ByPackageName []*PackageStat
-
-func (b ByPackageName) Len() int      { return len(b) }
-func (b ByPackageName) Swap(i, j int) { b[i], b[j] = b[j], b[i] }
-func (b ByPackageName) Less(i, j int) bool {
-	return b[i].Name < b[j].Name
-}
-
-// LinterOutput analyzes results and print linter output.
+// Suggestions analyzes results and print suggestions on deps.
 //
-// Linter output means suggestions which dependencies may be
-// copied to your source, because of its size.
-func (r *Result) LinterOutput(w io.Writer) {
+// It attempts to suggest which dependencies could be
+// copied to your source because of its small size.
+func (r *Result) Suggestions() {
 	if len(r.Counter) == 0 {
 		return
 	}
 
 	for _, p := range r.PackagesStats() {
 		if p.CanBeAvoided() {
-			fmt.Fprintf(w, "Package %s (%s) is a good candidate for removing from dependencies.\n", p.Name, p.Path)
-			fmt.Fprintf(w, "  Only %d LOC used, in %d calls, with %d level of nesting\n", p.LOCCum, p.DepsCount, p.DepthInternal)
+			fmt.Printf("Package %s (%s) is a good candidate for removing from dependencies.\n", p.Name, p.Path)
+			fmt.Printf("  Only %d LOC used, in %d calls, with %d level of nesting\n", p.LOCCum, p.DepsCount, p.DepthInternal)
 		}
 	}
 }

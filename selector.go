@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"go/types"
+	"strings"
 )
 
 // Selector represents Go language selector (x.f),
@@ -59,6 +60,74 @@ func NewSelector(pkg *types.Package, name, recv, typ string, loc int) *Selector 
 
 		LOC: loc,
 	}
+}
+
+func (sel *Selector) LOCCum() int {
+	if !sel.IsFunc() {
+		return 0
+	}
+
+	ret := sel.LOC
+	for _, dep := range sel.Deps {
+		ret += dep.LOCCum()
+	}
+
+	return ret
+}
+
+func (sel *Selector) Depth() int {
+	if !sel.IsFunc() {
+		return 0
+	}
+
+	ret := 0
+	for _, dep := range sel.Deps {
+		if dep.Pkg != sel.Pkg {
+			ret++
+			ret += dep.Depth()
+		}
+	}
+
+	return ret
+}
+
+func (sel *Selector) DepthInternal() int {
+	if !sel.IsFunc() {
+		return 0
+	}
+
+	ret := 0
+	for _, dep := range sel.Deps {
+		if dep.Pkg == sel.Pkg {
+			ret++
+			ret += dep.DepthInternal()
+		}
+	}
+
+	return ret
+}
+
+func (sel *Selector) IsFunc() bool {
+	return sel.Type == "func" || sel.Type == "method"
+}
+
+func (sel *Selector) PrintDeps() {
+	sel.printDeps(0)
+}
+
+func (sel *Selector) printDeps(depth int) {
+	fmt.Println(strings.Repeat("  ", depth), sel.Pkg.Name+"."+sel.Name)
+	for _, dep := range sel.Deps {
+		dep.printDeps(depth + 2)
+	}
+}
+
+type ByID []*Selector
+
+func (b ByID) Len() int      { return len(b) }
+func (b ByID) Swap(i, j int) { b[i], b[j] = b[j], b[i] }
+func (b ByID) Less(i, j int) bool {
+	return b[i].ID() < b[j].ID()
 }
 
 type Deps []*Selector

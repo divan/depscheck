@@ -31,10 +31,19 @@ func main() {
 
 	result := w.TopWalk()
 
-	if *verbose {
-		result.PrintPretty()
+	// Output results
+	if len(result.Counter) == 0 {
+		fmt.Println("No external dependencies found in this package")
+		return
 	}
-	//result.LinterOutput(os.Stdout)
+	if *verbose {
+		result.PrintStats()
+		result.PrintPackagesStats()
+	}
+	result.Suggestions()
+	if !*verbose {
+		fmt.Println("Run with -v option to see detailed stats for dependencies.")
+	}
 }
 
 func Usage() {
