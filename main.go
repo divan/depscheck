@@ -46,6 +46,7 @@ func main() {
 	}
 }
 
+// Usage prints usage information for this program.
 func Usage() {
 	fmt.Fprintf(os.Stderr, "Usage: %s [options] <args>\n\n", os.Args[0])
 	flag.PrintDefaults()

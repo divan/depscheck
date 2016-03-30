@@ -62,27 +62,29 @@ func NewSelector(pkg *types.Package, name, recv, typ string, loc int) *Selector 
 	}
 }
 
-func (sel *Selector) LOCCum() int {
-	if !sel.IsFunc() {
+// LOCCum returns cumulative LOC count for Selector and all it's dependencies.
+func (s *Selector) LOCCum() int {
+	if !s.IsFunc() {
 		return 0
 	}
 
-	ret := sel.LOC
-	for _, dep := range sel.Deps {
+	ret := s.LOC
+	for _, dep := range s.Deps {
 		ret += dep.LOCCum()
 	}
 
 	return ret
 }
 
-func (sel *Selector) Depth() int {
-	if !sel.IsFunc() {
+// Depth returns Depth for Selector and all it's external dependencies.
+func (s *Selector) Depth() int {
+	if !s.IsFunc() {
 		return 0
 	}
 
 	ret := 0
-	for _, dep := range sel.Deps {
-		if dep.Pkg != sel.Pkg {
+	for _, dep := range s.Deps {
+		if dep.Pkg != s.Pkg {
 			ret++
 			ret += dep.Depth()
 		}
@@ -91,14 +93,15 @@ func (sel *Selector) Depth() int {
 	return ret
 }
 
-func (sel *Selector) DepthInternal() int {
-	if !sel.IsFunc() {
+// DepthInternal returns Depth for Selector and all it's internal dependencies.
+func (s *Selector) DepthInternal() int {
+	if !s.IsFunc() {
 		return 0
 	}
 
 	ret := 0
-	for _, dep := range sel.Deps {
-		if dep.Pkg == sel.Pkg {
+	for _, dep := range s.Deps {
+		if dep.Pkg == s.Pkg {
 			ret++
 			ret += dep.DepthInternal()
 		}
@@ -107,21 +110,24 @@ func (sel *Selector) DepthInternal() int {
 	return ret
 }
 
-func (sel *Selector) IsFunc() bool {
-	return sel.Type == "func" || sel.Type == "method"
+// IsFunc returns true if Selector is either a function or a method.
+func (s *Selector) IsFunc() bool {
+	return s.Type == "func" || s.Type == "method"
 }
 
-func (sel *Selector) PrintDeps() {
-	sel.printDeps(0)
+// PrintDeps recursively prints deps for selector.
+func (s *Selector) PrintDeps() {
+	s.printDeps(0)
 }
 
-func (sel *Selector) printDeps(depth int) {
-	fmt.Println(strings.Repeat("  ", depth), sel.Pkg.Name+"."+sel.Name)
-	for _, dep := range sel.Deps {
-		dep.printDeps(depth + 2)
+func (s *Selector) printDeps(depth int) {
+	fmt.Println(strings.Repeat("  ", depth), fmt.Sprintf("%s.%s", s.Pkg.Name, s.Name))
+	for _, dep := range s.Deps {
+		dep.printDeps(depth + 1)
 	}
 }
 
+// ByID is helper type for sorting selectors by ID.
 type ByID []*Selector
 
 func (b ByID) Len() int      { return len(b) }
@@ -130,8 +136,10 @@ func (b ByID) Less(i, j int) bool {
 	return b[i].ID() < b[j].ID()
 }
 
+// Deps is a shorthand for Dependencies - a slice of Selectors.
 type Deps []*Selector
 
+// Append adds new Selector to Deps.
 func (deps *Deps) Append(s *Selector) {
 	for _, d := range *deps {
 		if d.ID() == s.ID() {
@@ -141,14 +149,16 @@ func (deps *Deps) Append(s *Selector) {
 	*deps = append(*deps, s)
 }
 
-func (deps Deps) HasRecursion(sel *Selector) bool {
+// HasRecursion attempts to find selector in nested dependencies
+// to avoid recursion.
+func (deps Deps) HasRecursion(s *Selector) bool {
 	for _, dep := range deps {
-		if dep.ID() == sel.ID() {
+		if dep.ID() == s.ID() {
 			return true
 		}
 
 		if dep.Deps != nil {
-			return dep.Deps.HasRecursion(sel)
+			return dep.Deps.HasRecursion(s)
 		}
 	}
 	return false

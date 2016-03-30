@@ -55,6 +55,11 @@ func (w *Walker) TopWalk() *Result {
 	return result
 }
 
+// WalkPackage looks for dependencies used in a given package and saves
+// selectors to result.
+//
+// It should be called for the top-level package only.
+// Only external dependencies are added to result.
 func (w *Walker) WalkPackage(pkg *loader.PackageInfo, result *Result) {
 	for _, obj := range pkg.Uses {
 		if obj.Pkg() == nil || obj.Pkg() == pkg.Pkg {
@@ -73,6 +78,9 @@ func (w *Walker) WalkPackage(pkg *loader.PackageInfo, result *Result) {
 	}
 }
 
+// WalkObject builds Selector from the given pkg and object.
+//
+// It recursively goes into nested functions/calls adding it as Deps.
 func (w *Walker) WalkObject(pkg *loader.PackageInfo, obj types.Object) *Selector {
 	if obj == nil {
 		return nil
@@ -134,6 +142,8 @@ func (w *Walker) WalkObject(pkg *loader.PackageInfo, obj types.Object) *Selector
 	return sel
 }
 
+// WalkFuncBody searches for all internal or external selectors, used in a given
+// function. It recursively goes into it, building Deps slice.
 func (w *Walker) WalkFuncBody(pkg *loader.PackageInfo, node *ast.FuncDecl) Deps {
 	var deps Deps
 	ast.Inspect(node, func(n ast.Node) bool {
@@ -167,6 +177,7 @@ func (w *Walker) WalkFuncBody(pkg *loader.PackageInfo, node *ast.FuncDecl) Deps 
 	return deps
 }
 
+// FindDefDecl searches for declaration and definition for the given object.
 func (w *Walker) FindDefDecl(pkg *loader.PackageInfo, obj types.Object) (*ast.Ident, types.Object) {
 	for decl, def := range pkg.Defs {
 		if def == nil || obj == nil {
@@ -180,6 +191,7 @@ func (w *Walker) FindDefDecl(pkg *loader.PackageInfo, obj types.Object) (*ast.Id
 	return nil, nil
 }
 
+// FnDecl searches for the FuncDecl based on ast.Ident node.
 func (w *Walker) FnDecl(pkg *loader.PackageInfo, decl *ast.Ident) *ast.FuncDecl {
 	if fn, ok := w.CacheNodes[decl]; ok {
 		return fn
@@ -206,7 +218,6 @@ func (w *Walker) LOC(node *ast.FuncDecl) int {
 
 	body := node.Body
 	if body == nil {
-		return 0
 		w.CacheLOC[node] = 0
 	}
 
@@ -225,6 +236,7 @@ func (w *Walker) LOC(node *ast.FuncDecl) int {
 	return lines
 }
 
+// LookupObject searches for the object in current package by ast.Ident node.
 func (w *Walker) LookupObject(pkg *loader.PackageInfo, expr *ast.Ident) types.Object {
 	for decl, def := range pkg.Defs {
 		if decl.Obj != nil && decl.Obj == expr.Obj {

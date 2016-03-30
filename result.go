@@ -99,6 +99,7 @@ func (r *Result) All() []*Selector {
 	return ret
 }
 
+// PrintDeps recursively print deps for all selectors found.
 func (r *Result) PrintDeps() {
 	for _, s := range r.All() {
 		s.PrintDeps()

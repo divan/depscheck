@@ -154,6 +154,9 @@ var stdPkgs = []string{
 	"unsafe",
 }
 
+// IsStdlib attempts to check if package belongs to stdlib.
+// FIXME: there is probably more idiomatic way to do this,
+// I just need to find it.
 func IsStdlib(path string) bool {
 	for _, p := range stdPkgs {
 		if p == path {

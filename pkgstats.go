@@ -28,7 +28,7 @@ func (p *PackageStat) String() string {
 	return fmt.Sprintf("%s: (%d, %d) [LOC: %d] Depth [%d, %d]\n", p.Path, p.DepsCount, p.DepsCallsCount, p.LOCCum, p.Depth, p.DepthInternal)
 }
 
-// PackageStats returns stats by packages in all selectors.
+// PackagesStats returns stats by packages in all selectors.
 func (r *Result) PackagesStats() []*PackageStat {
 	pkgs := make(map[Package]*PackageStat)
 	for _, sel := range r.All() {
@@ -77,6 +77,7 @@ func (p *PackageStat) CanBeAvoided() bool {
 	return true
 }
 
+// ByPackageName is a helper type for sorting PackageStats by Name.
 type ByPackageName []*PackageStat
 
 func (b ByPackageName) Len() int      { return len(b) }
