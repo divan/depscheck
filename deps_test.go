@@ -38,10 +38,9 @@ func TestExportedFuncs(t *testing.T) {
 
 	src = "test/recursion.go"
 	result = getResult(t, "test", src)
-	checkCount(src, t, result, 3)
-	checkSelector(src, t, result, "xsample.func.SampleFunc", 1, 6, 14, 0, 2)
-	checkSelector(src, t, result, "xsample.(Foo).method.Bar", 1, 3, 3, 0, 0)
-	checkSelector(src, t, result, "xsample.type.Foo", 1, 0, 0, 0, 0)
+	checkCount(src, t, result, 2)
+	checkSelector(src, t, result, "bar.func.Bar", 1, 4, 4, 0, 0)
+	checkSelector(src, t, result, "foo.func.Foo", 1, 4, 8, 1, 0)
 }
 
 func getResult(t *testing.T, name string, sources ...string) *Result {
@@ -75,12 +74,12 @@ func checkSelector(src string, t *testing.T, r *Result, fn string, count, loc, l
 		t.Fatalf("%s: expected to func '%s' to have %d LOC, but got %d", src, fn, loc, sel.LOC)
 	}
 	if sel.LOCCum() != loccum {
-		t.Fatalf("%s: expected to func '%s' to have %d Cumulative LOC, but got %d", src, fn, loccum, sel.LOCCum)
+		t.Fatalf("%s: expected to func '%s' to have %d Cumulative LOC, but got %d", src, fn, loccum, sel.LOCCum())
 	}
 	if sel.Depth() != depth {
-		t.Fatalf("%s: expected to func '%s' to have Depth %d, but got %d", src, fn, depth, sel.Depth)
+		t.Fatalf("%s: expected to func '%s' to have Depth %d, but got %d", src, fn, depth, sel.Depth())
 	}
 	if sel.DepthInternal() != depthint {
-		t.Fatalf("%s: expected to func '%s' to have %d Depth Internal, but got %d", src, fn, depthint, sel.DepthInternal)
+		t.Fatalf("%s: expected to func '%s' to have %d Depth Internal, but got %d", src, fn, depthint, sel.DepthInternal())
 	}
 }

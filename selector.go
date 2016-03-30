@@ -19,7 +19,7 @@ type Selector struct {
 	// Applies for functions
 	LOC int // actual Lines Of Code
 
-	Deps []*Selector
+	Deps Deps
 }
 
 // String implements Stringer interface for Selector.
@@ -70,4 +70,17 @@ func (deps *Deps) Append(s *Selector) {
 		}
 	}
 	*deps = append(*deps, s)
+}
+
+func (deps Deps) HasRecursion(sel *Selector) bool {
+	for _, dep := range deps {
+		if dep.ID() == sel.ID() {
+			return true
+		}
+
+		if dep.Deps != nil {
+			return dep.Deps.HasRecursion(sel)
+		}
+	}
+	return false
 }
