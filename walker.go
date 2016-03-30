@@ -105,6 +105,9 @@ func (w *Walker) WalkObject(pkg *loader.PackageInfo, obj types.Object) *Selector
 		}
 	case *types.TypeName:
 		typ = "type"
+		if _, ok := d.Type().Underlying().(*types.Interface); ok {
+			typ = "interface"
+		}
 	}
 
 	fnDecl := w.FnDecl(pkg, decl)

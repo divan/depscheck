@@ -43,6 +43,37 @@ func TestExportedFuncs(t *testing.T) {
 	checkSelector(src, t, result, "foo.func.Foo", 1, 4, 8, 1, 0)
 }
 
+func TestConsts(t *testing.T) {
+	var result *Result
+	var src string
+
+	src = "test/const.go"
+	result = getResult(t, "test", src)
+	checkCount(src, t, result, 1)
+	checkSelector(src, t, result, "foo.const.FooConst", 1, 0, 0, 0, 0)
+}
+
+func TestVars(t *testing.T) {
+	var result *Result
+	var src string
+
+	src = "test/var.go"
+	result = getResult(t, "test", src)
+	checkCount(src, t, result, 1)
+	checkSelector(src, t, result, "foo.var.FooVar", 1, 0, 0, 0, 0)
+}
+
+func TestInterface(t *testing.T) {
+	var result *Result
+	var src string
+
+	src = "test/interface.go"
+	result = getResult(t, "test", src)
+	checkCount(src, t, result, 2)
+	checkSelector(src, t, result, "foo.(Fooer).method.Foo", 1, 0, 0, 0, 0)
+	checkSelector(src, t, result, "foo.interface.Fooer", 1, 0, 0, 0, 0)
+}
+
 func getResult(t *testing.T, name string, sources ...string) *Result {
 	var conf loader.Config
 	conf.CreateFromFilenames(name, sources...)
