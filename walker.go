@@ -219,7 +219,7 @@ func (w *Walker) LOC(node *ast.FuncDecl) int {
 
 func (w *Walker) LookupObject(pkg *loader.PackageInfo, expr *ast.Ident) types.Object {
 	for decl, def := range pkg.Defs {
-		if decl == expr {
+		if decl.Obj != nil && decl.Obj == expr.Obj {
 			return def
 		}
 	}

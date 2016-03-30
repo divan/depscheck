@@ -7,23 +7,27 @@ import (
 
 func TestExportedFuncs(t *testing.T) {
 	var result *Result
+	var src string
 
-	result = getResult(t, "test", "test/test_exported.go")
-	checkCount(t, result, 2)
-	checkSelector(t, result, "xsample.var.Sample", 1, 0, 0, 0, 0)
-	checkSelector(t, result, "xsample.func.SampleFunc", 1, 6, 14, 0, 2)
+	src = "test/test_exported.go"
+	result = getResult(t, "test", src)
+	checkCount(src, t, result, 2)
+	checkSelector(src, t, result, "xsample.var.Sample", 1, 0, 0, 0, 0)
+	checkSelector(src, t, result, "xsample.func.SampleFunc", 1, 6, 14, 0, 2)
 
-	result = getResult(t, "test", "test/test_exported2.go")
-	checkCount(t, result, 3)
-	checkSelector(t, result, "xsample.func.SampleFunc", 1, 6, 14, 0, 2)
-	checkSelector(t, result, "xsample.(Foo).method.Bar", 1, 3, 3, 0, 0)
-	checkSelector(t, result, "xsample.var.Foo", 1, 0, 0, 0, 0)
+	src = "test/test_exported2.go"
+	result = getResult(t, "test", src)
+	checkCount(src, t, result, 3)
+	checkSelector(src, t, result, "xsample.func.SampleFunc", 1, 6, 14, 0, 2)
+	checkSelector(src, t, result, "xsample.(Foo).method.Bar", 1, 3, 3, 0, 0)
+	checkSelector(src, t, result, "xsample.var.Foo", 1, 0, 0, 0, 0)
 
-	result = getResult(t, "test", "test/test_pkg_renamed.go")
-	checkCount(t, result, 3)
-	checkSelector(t, result, "xsample.func.SampleFunc", 1, 6, 14, 0, 2)
-	checkSelector(t, result, "xsample.(Foo).method.Bar", 1, 3, 3, 0, 0)
-	checkSelector(t, result, "xsample.var.Foo", 1, 0, 0, 0, 0)
+	src = "test/test_pkg_renamed.go"
+	result = getResult(t, "test", src)
+	checkCount(src, t, result, 3)
+	checkSelector(src, t, result, "xsample.func.SampleFunc", 1, 6, 14, 0, 2)
+	checkSelector(src, t, result, "xsample.(Foo).method.Bar", 1, 3, 3, 0, 0)
+	checkSelector(src, t, result, "xsample.var.Foo", 1, 0, 0, 0, 0)
 }
 
 func getResult(t *testing.T, name string, sources ...string) *Result {
@@ -38,31 +42,31 @@ func getResult(t *testing.T, name string, sources ...string) *Result {
 	return w.TopWalk()
 }
 
-func checkCount(t *testing.T, r *Result, want int) {
+func checkCount(src string, t *testing.T, r *Result, want int) {
 	if have := len(r.Counter); have != want {
-		t.Fatalf("Expected to have %d selectors, but have %d", want, have)
+		t.Fatalf("%s: expected to have %d selectors, but have %d", src, want, have)
 	}
 
 }
 
-func checkSelector(t *testing.T, r *Result, fn string, count, loc, loccum, depth, depthint int) {
+func checkSelector(src string, t *testing.T, r *Result, fn string, count, loc, loccum, depth, depthint int) {
 	sel, ok := r.Selectors[fn]
 	if !ok {
-		t.Fatalf("Expected to see func '%s' in result, but could not", fn)
+		t.Fatalf("%s: expected to see func '%s' in result, but could not", src, fn)
 	}
 	if r.Counter[fn] != count {
-		t.Fatalf("Expected to func '%s' to have Count %d , but got %d", fn, count, r.Counter[fn])
+		t.Fatalf("%s: expected to func '%s' to have Count %d , but got %d", src, fn, count, r.Counter[fn])
 	}
 	if sel.LOC != loc {
-		t.Fatalf("Expected to func '%s' to have %d LOC, but got %d", fn, loc, sel.LOC)
+		t.Fatalf("%s: expected to func '%s' to have %d LOC, but got %d", src, fn, loc, sel.LOC)
 	}
 	if sel.LOCCum() != loccum {
-		t.Fatalf("Expected to func '%s' to have %d Cumulative LOC, but got %d", fn, loccum, sel.LOCCum)
+		t.Fatalf("%s: expected to func '%s' to have %d Cumulative LOC, but got %d", src, fn, loccum, sel.LOCCum)
 	}
 	if sel.Depth() != depth {
-		t.Fatalf("Expected to func '%s' to have Depth %d, but got %d", fn, depth, sel.Depth)
+		t.Fatalf("%s: expected to func '%s' to have Depth %d, but got %d", src, fn, depth, sel.Depth)
 	}
 	if sel.DepthInternal() != depthint {
-		t.Fatalf("Expected to func '%s' to have %d Depth Internal, but got %d", fn, depthint, sel.DepthInternal)
+		t.Fatalf("%s: expected to func '%s' to have %d Depth Internal, but got %d", src, fn, depthint, sel.DepthInternal)
 	}
 }
