@@ -20,14 +20,14 @@ func TestExportedFuncs(t *testing.T) {
 	checkCount(src, t, result, 3)
 	checkSelector(src, t, result, "xsample.func.SampleFunc", 1, 6, 14, 0, 2)
 	checkSelector(src, t, result, "xsample.(Foo).method.Bar", 1, 3, 3, 0, 0)
-	checkSelector(src, t, result, "xsample.var.Foo", 1, 0, 0, 0, 0)
+	checkSelector(src, t, result, "xsample.type.Foo", 1, 0, 0, 0, 0)
 
 	src = "test/test_pkg_renamed.go"
 	result = getResult(t, "test", src)
 	checkCount(src, t, result, 3)
 	checkSelector(src, t, result, "xsample.func.SampleFunc", 1, 6, 14, 0, 2)
 	checkSelector(src, t, result, "xsample.(Foo).method.Bar", 1, 3, 3, 0, 0)
-	checkSelector(src, t, result, "xsample.var.Foo", 1, 0, 0, 0, 0)
+	checkSelector(src, t, result, "xsample.type.Foo", 1, 0, 0, 0, 0)
 }
 
 func getResult(t *testing.T, name string, sources ...string) *Result {

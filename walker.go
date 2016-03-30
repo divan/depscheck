@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"go/ast"
 	"go/types"
 	"golang.org/x/tools/go/loader"
@@ -100,7 +101,7 @@ func (w *Walker) WalkObject(pkg *loader.PackageInfo, obj types.Object) *Selector
 		typ = "func"
 		if r := d.Type().(*types.Signature).Recv(); r != nil {
 			typ = "method"
-			recv = r.Type().String()
+			recv = printType(r.Type())
 		}
 	case *types.TypeName:
 		typ = "type"
@@ -225,4 +226,14 @@ func (w *Walker) LookupObject(pkg *loader.PackageInfo, expr *ast.Ident) types.Ob
 	}
 
 	return nil
+}
+
+func printType(t types.Type) string {
+	switch t := t.(type) {
+	case *types.Pointer:
+		return fmt.Sprintf("*%s", printType(t.Elem()))
+	case *types.Named:
+		return t.Obj().Name()
+	}
+	return t.String()
 }
