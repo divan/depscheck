@@ -122,7 +122,7 @@ You can see that depscheck suggested to take a look into two packages - `byten` 
    
 # Notes
 - Suggestions made by this tool are totally optional and could be totally false alarms. The language used is "package X is a good candidate to be remove" to bring your attention to inspect this package and decide.
-- Terms 'Depth' and 'DepthInternal' in statistics mean a number of external/internal dependencies (functions/methods/vars). Function with one level of external nested calls that contain 3 of them will have Depth equal 3. If 'depth' sounds strange, I'd be glad to hear suggestions on better naming. Also, actual func depth is easy to calculate also.
+- Terms 'Depth' and 'DepthInternal' in statistics mean a number of external/internal dependencies (functions/methods/vars). Function with one level of external nested calls that contain 3 of them will have Depth equal 3. If 'depth' sounds strange, I'd be glad to hear suggestions on better naming. Also, actual func depth is easy to calculate.
 - This tool is beta and may report incorrect info and contain bugs. Don't rely a lot on its results without double checking.
 - There are many situations where it's really hard to even define what is "correct" - for example Cumulative Lines Of Code for code that has recursive dependencies. Also, external function with 1 line may use global variable or channel that is used by 99% other package's funcs. It's hard to predict all possible cases.
 - If you're encountered a situation where tools is reporting incorrectly or panics - feel free to open an issue or (better) create Pull Request.
