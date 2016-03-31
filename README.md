@@ -1,5 +1,7 @@
 # DepsCheck
 
+[![Go Report Card](https://goreportcard.com/badge/github.com/divan/depscheck)](https://goreportcard.com/report/github.com/divan/depscheck)
+
 Dependency checker for Golang (Go) packages. Prints stats and suggests to remove small LeftPad-like imports if any.
 
 ## Introduction
