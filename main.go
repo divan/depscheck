@@ -9,7 +9,7 @@ import (
 )
 
 var (
-	stdlib  = flag.Bool("stdlib", false, "Threat stdlib packages as external dependencies")
+	stdlib  = flag.Bool("stdlib", false, "Treat stdlib packages as external dependencies")
 	tests   = flag.Bool("tests", false, "Include tests for deps analysis")
 	verbose = flag.Bool("v", false, "Be verbose and print whole deps info table")
 	totals  = flag.Bool("totalonly", false, "Print only totals stats")
