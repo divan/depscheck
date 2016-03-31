@@ -2,7 +2,7 @@
 
 [![Build Status](https://drone.io/github.com/divan/depscheck/status.png)](https://drone.io/github.com/divan/depscheck/latest)
 
-External dependencies checker for Golang projects. It shows stats on your project's dependencies and suggests to remove small ones (like LeftPad oneliner) by including into your project directly.
+Dependency checker for Golang (Go) packages. Prints stats and suggests to remove small LeftPad-like imports if any.
 
 ## Introduction
 
