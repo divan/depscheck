@@ -159,7 +159,7 @@ func (w *Walker) WalkFuncBody(pkg *loader.PackageInfo, node *ast.FuncDecl) Deps 
 				return false
 			case *ast.SelectorExpr:
 				obj, ok := pkg.Uses[expr.Sel]
-				if !ok {
+				if !ok || obj.Pkg() == nil {
 					return false
 				}
 
