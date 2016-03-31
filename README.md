@@ -1,7 +1,5 @@
 # DepsCheck
 
-[![Build Status](https://drone.io/github.com/divan/depscheck/status.png)](https://drone.io/github.com/divan/depscheck/latest)
-
 Dependency checker for Golang (Go) packages. Prints stats and suggests to remove small LeftPad-like imports if any.
 
 ## Introduction
@@ -126,6 +124,7 @@ You can see that depscheck suggested to take a look into two packages - `byten` 
 - This tool is beta and may report incorrect info and contain bugs. Don't rely a lot on its results without double checking.
 - There are many situations where it's really hard to even define what is "correct" - for example Cumulative Lines Of Code for code that has recursive dependencies. Also, external function with 1 line may use global variable or channel that is used by 99% other package's funcs. It's hard to predict all possible cases.
 - If you're encountered a situation where tools is reporting incorrectly or panics - feel free to open an issue or (better) create Pull Request.
+- This tool require Go 1.6+
 
 # License
 
