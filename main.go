@@ -12,6 +12,7 @@ var (
 	stdlib  = flag.Bool("stdlib", false, "Threat stdlib packages as external dependencies")
 	tests   = flag.Bool("tests", false, "Include tests for deps analysis")
 	verbose = flag.Bool("v", false, "Be verbose and print whole deps info table")
+	totals  = flag.Bool("totalonly", false, "Print only totals stats")
 )
 
 func main() {
@@ -32,6 +33,11 @@ func main() {
 	result := w.TopWalk()
 
 	// Output results
+	topPackage := p.InitialPackages()[0].Pkg.Path()
+	fmt.Println(result.Totals(topPackage))
+	if *totals {
+		return
+	}
 	if len(result.Counter) == 0 {
 		fmt.Println("No external dependencies found in this package")
 		return

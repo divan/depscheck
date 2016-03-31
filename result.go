@@ -118,8 +118,8 @@ func (r *Result) Suggestions() {
 	var hasCandidates bool
 	for _, p := range r.PackagesStats() {
 		if p.CanBeAvoided() {
-			fmt.Printf("Package %s (%s) is a good candidate for removing from dependencies.\n", p.Name, p.Path)
-			fmt.Printf("  Only %d LOC used, in %d calls, with %d level of nesting\n", p.LOCCum, p.DepsCount, p.DepthInternal)
+			fmt.Printf(" - Package %s (%s) is a good candidate for removing from dependencies.\n", p.Name, p.Path)
+			fmt.Printf("   Only %d LOC used, in %d calls, with %d level of nesting\n", p.LOCCum, p.DepsCount, p.DepthInternal)
 			hasCandidates = true
 		}
 	}
@@ -127,4 +127,36 @@ func (r *Result) Suggestions() {
 	if !hasCandidates {
 		fmt.Println("Cool, looks like your dependencies are sane.")
 	}
+}
+
+// Totals represnts total stats for all packages.
+type Totals struct {
+	Package string
+
+	Packages      int
+	LOC           int
+	Calls         int
+	Depth         int
+	DepthInternal int
+}
+
+// Totals computes Totals for Result.
+func (r *Result) Totals(pkg string) *Totals {
+	t := &Totals{
+		Package: pkg,
+	}
+	for _, stat := range r.PackagesStats() {
+		t.Packages++
+		t.LOC += stat.LOCCum
+		t.Calls += stat.DepsCallsCount
+		t.Depth += stat.Depth
+		t.DepthInternal += stat.DepthInternal
+	}
+	return t
+}
+
+// String implements Stringer for Totals type.
+func (t Totals) String() string {
+	return fmt.Sprintf("%s: %d packages, %d LOC, %d calls, %d depth, %d depth int.",
+		t.Package, t.Packages, t.LOC, t.Calls, t.Depth, t.DepthInternal)
 }
