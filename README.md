@@ -42,7 +42,7 @@ The `-v` flag will print more verbose info with detailed statistics:
     depscheck -v .
     depscheck -v github.com/Typeform/goblitline
 
-With `-stdlib` flag, *depscheck* also can also analyze stdlib packages and threat them as an external dependencies. Suggestion mode is disabled with stdlib flag (stdlib is smarter than this tool), so you will probably will want `-v` flag to see how your package uses stdlib.
+With `-stdlib` flag, *depscheck* also can analyze stdlib packages and treat them as an external dependencies. Suggestion mode is disabled with stdlib flag (stdlib is smarter than this tool), so you will probably will want `-v` flag to see how your package uses stdlib.
 
     depscheck -stdlib -v net/http
     depscheck -stdlib -v github.com/divan/gofresh
