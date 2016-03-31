@@ -35,6 +35,11 @@ func TestExportedFuncs(t *testing.T) {
 	checkSelector(src, t, result, "xsample.func.SampleFunc", 1, 6, 14, 0, 2)
 	checkSelector(src, t, result, "xsample.(Foo).method.Bar", 1, 3, 3, 0, 0)
 	checkSelector(src, t, result, "xsample.type.Foo", 1, 0, 0, 0, 0)
+}
+
+func TestRecursion(t *testing.T) {
+	var result *Result
+	var src string
 
 	src = "test/recursion.go"
 	result = getResult(t, "test", src)
