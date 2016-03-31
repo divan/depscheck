@@ -25,7 +25,7 @@ Just run go get:
 
 To update:
 
-    go get github.com/divan/depscheck
+    go get -u github.com/divan/depscheck
     
 # Usage
 
