@@ -57,7 +57,9 @@ Sometimes you want only totals statistics - how many packages, calls and LOC in 
 Don't forget `-help` flag for detailed usage information.
 
 # Sample Output
-```$ depscheck -v github.com/divan/expvarmon
+
+```
+$ depscheck -v github.com/divan/expvarmon
 github.com/divan/expvarmon: 4 packages, 1022 LOC, 93 calls, 11 depth, 23 depth int.
 +--------+---------+---------------------+-----------+-------+-----+--------+-------+----------+
 |  PKG   |  RECV   |        NAME         |   TYPE    | COUNT | LOC | LOCCUM | DEPTH | DEPTHINT |
