@@ -15,31 +15,36 @@ type Walker struct {
 	CacheLOC   map[*ast.FuncDecl]int
 	CacheNodes map[*ast.Ident]*ast.FuncDecl
 
-	Stdlib bool
+	Stdlib   bool
+	Internal bool
 
 	Visited map[*ast.FuncDecl]*Selector
 }
 
 // NewWalker inits new AST walker.
-func NewWalker(p *loader.Program, stdlib bool) *Walker {
+func NewWalker(p *loader.Program, stdlib, internal bool) *Walker {
 	packages := make(map[string]Package)
 	for _, pkg := range p.InitialPackages() {
 		// prepare map of resolved imports
 		for _, i := range pkg.Pkg.Imports() {
+
+			if !internal && IsInternal(pkg.Pkg.Path(), i.Path()) {
+				continue
+			}
 			if !stdlib && IsStdlib(i.Path()) {
 				continue
 			}
 			packages[i.Name()] = NewPackage(i.Name(), i.Path())
 		}
 	}
-
 	return &Walker{
 		P:          p,
 		Packages:   packages,
 		CacheLOC:   make(map[*ast.FuncDecl]int),
 		CacheNodes: make(map[*ast.Ident]*ast.FuncDecl),
 
-		Stdlib: stdlib,
+		Stdlib:   stdlib,
+		Internal: internal,
 
 		Visited: make(map[*ast.FuncDecl]*Selector),
 	}
@@ -63,6 +68,11 @@ func (w *Walker) TopWalk() *Result {
 func (w *Walker) WalkPackage(pkg *loader.PackageInfo, result *Result) {
 	for _, obj := range pkg.Uses {
 		if obj.Pkg() == nil || obj.Pkg() == pkg.Pkg {
+			continue
+		}
+
+		// Omit the internal modules
+		if !w.Internal && IsInternal(pkg.Pkg.Path(), obj.Pkg().Path()) {
 			continue
 		}
 

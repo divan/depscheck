@@ -87,7 +87,7 @@ func getResult(t *testing.T, name string, sources ...string) *Result {
 		t.Fatal(err)
 	}
 
-	w := NewWalker(p, false)
+	w := NewWalker(p, false, false)
 	return w.TopWalk()
 }
 
