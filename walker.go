@@ -28,10 +28,10 @@ func NewWalker(p *loader.Program, stdlib, internal bool) *Walker {
 		// prepare map of resolved imports
 		for _, i := range pkg.Pkg.Imports() {
 
-			if !internal && IsInternal(pkg.Pkg.Path(), i.Path()) {
+			if !stdlib && IsStdlib(i.Path()) {
 				continue
 			}
-			if !stdlib && IsStdlib(i.Path()) {
+			if !internal && IsInternal(pkg.Pkg.Path(), i.Path()) {
 				continue
 			}
 			packages[i.Name()] = NewPackage(i.Name(), i.Path())
