@@ -3,13 +3,13 @@ package main
 import "strings"
 
 func IsInternal(pkg, subpkg string) bool {
-	//Skip if any is stdlib
+	// Skip if any is stdlib
 	if IsStdlib(pkg) || IsStdlib(subpkg) {
 		return false
 	}
 
 	// Or it is submodule
-	if strings.HasPrefix(subpkg, pkg) {
+	if strings.HasPrefix(subpkg, pkg + "/") {
 		return true
 	}
 

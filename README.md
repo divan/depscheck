@@ -44,7 +44,7 @@ The `-v` flag will print more verbose info with detailed statistics:
     depscheck -v .
     depscheck -v github.com/Typeform/goblitline
 
-By default, the external packages are checked only. Use `-internal` flag in case you want to see statistics on internal and vendored packages too.
+By default, only external packages are checked. Use `-internal` flag in case you want to see statistics on internal and vendored packages too.
 
     depscheck -v -internal golang.org/x/tools/go/loader
 
