@@ -34,7 +34,6 @@ func IsInternal(pkg, subpkg string) bool {
 	// for non-standard layouts ("gopkg.in/music.v0") it'll
 	// report false negative.
 	if i := strings.Count(pkg, "/"); i > 2 {
-		fmt.Println("DD", pkg, i)
 		if strings.HasPrefix(subpkg, pkg[0:i]) {
 			return true
 		}
