@@ -44,6 +44,10 @@ The `-v` flag will print more verbose info with detailed statistics:
     depscheck -v .
     depscheck -v github.com/Typeform/goblitline
 
+By default, only external packages are checked. Use `-internal` flag in case you want to see statistics on internal and vendored packages too.
+
+    depscheck -v -internal golang.org/x/tools/go/loader
+
 With `-stdlib` flag, *depscheck* also can analyze stdlib packages and treat them as an external dependencies. Suggestion mode is disabled with stdlib flag (stdlib is smarter than this tool), so you will probably will want `-v` flag to see how your package uses stdlib.
 
     depscheck -stdlib -v net/http

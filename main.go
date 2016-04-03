@@ -9,10 +9,11 @@ import (
 )
 
 var (
-	stdlib  = flag.Bool("stdlib", false, "Treat stdlib packages as external dependencies")
-	tests   = flag.Bool("tests", false, "Include tests for deps analysis")
-	verbose = flag.Bool("v", false, "Be verbose and print whole deps info table")
-	totals  = flag.Bool("totalonly", false, "Print only totals stats")
+	stdlib   = flag.Bool("stdlib", false, "Treat stdlib packages as external dependencies")
+	tests    = flag.Bool("tests", false, "Include tests for deps analysis")
+	verbose  = flag.Bool("v", false, "Be verbose and print whole deps info table")
+	totals   = flag.Bool("totalonly", false, "Print only totals stats")
+	internal = flag.Bool("internal", false, "Include intertanl packages analysis")
 )
 
 func main() {
@@ -28,7 +29,7 @@ func main() {
 		return
 	}
 
-	w := NewWalker(p, *stdlib)
+	w := NewWalker(p, *stdlib, *internal)
 
 	result := w.TopWalk()
 
