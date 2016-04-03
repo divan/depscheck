@@ -21,3 +21,20 @@ func TestPackageChecks(t *testing.T) {
 	pkg, subpkg = "github.com/divan/package1", "github.com/divan/package2"
 	checkResult(pkg, subpkg, false)
 }
+
+func BenchmarkIsStdlibTrue(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		IsStdlib("fmt")
+	}
+}
+func BenchmarkIsStdlibFalse(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		IsStdlib("github.com/divan/package")
+	}
+}
+
+func BenchmarkIsInternal(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		IsInternal("github.com/divan/package1", "github.com/divan/package2")
+	}
+}
