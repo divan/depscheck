@@ -29,8 +29,12 @@ func IsInternal(pkg, subpkg string) bool {
 		return true
 	}
 
-	// Or it is on same nesting level
-	if i := strings.LastIndex(pkg, "/"); i > 0 {
+	// Or it is on same repo nesting level (nesting > 2)
+	// FIXME: this code assumes layout "server/user/repo",
+	// for non-standard layouts ("gopkg.in/music.v0") it'll
+	// report false negative.
+	if i := strings.Count(pkg, "/"); i > 2 {
+		fmt.Println("DD", pkg, i)
 		if strings.HasPrefix(subpkg, pkg[0:i]) {
 			return true
 		}
