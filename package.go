@@ -1,6 +1,11 @@
 package main
 
-import "strings"
+import (
+	"strings"
+	"path/filepath"
+	"os"
+	"runtime"
+)
 
 // Package represents package info, needed for this tool.
 type Package struct {
@@ -16,6 +21,10 @@ func NewPackage(name, path string) Package {
 	}
 }
 
+func init() {
+	// Try to load list of std packages from goroot
+	getStdPkgs()
+}
 // IsInternal returns true if subpkg is a subpackage of
 // pkg.
 func IsInternal(pkg, subpkg string) bool {
@@ -54,7 +63,43 @@ func IsStdlib(path string) bool {
 	return false
 }
 
-var stdPkgs = []string{
+// getStdPkgs tries to get list of stdlib packages by reading GOROOT
+//
+// This approach is used by "go list std" tool
+// Based on go/cmd function matchPackages (https://golang.org/src/cmd/go/main.go#L553)
+// and listStdPkgs function from https://golang.org/src/go/build/deps_test.go#L420
+//
+// List of stdlib packages sets to stdPkgsDedault if something went wrong
+func getStdPkgs() {
+	goroot := runtime.GOROOT()
+
+	src := filepath.Join(goroot, "src") + string(filepath.Separator)
+	walkFn := func(path string, fi os.FileInfo, err error) error {
+		if err != nil || !fi.IsDir() || path == src {
+			return nil
+		}
+
+		base := filepath.Base(path)
+		if strings.HasPrefix(base, ".") || strings.HasPrefix(base, "_") || base == "testdata" {
+			return filepath.SkipDir
+		}
+
+		name := filepath.ToSlash(path[len(src):])
+		if name == "builtin" || name == "cmd" || strings.Contains(name, ".") {
+			return filepath.SkipDir
+		}
+
+		stdPkgs = append(stdPkgs, name)
+		return nil
+	}
+	if err := filepath.Walk(src, walkFn); err != nil {
+		stdPkgs = stdPkgsDedault
+	}
+}
+
+var stdPkgs []string
+
+var stdPkgsDedault = []string{
 	"archive/tar",
 	"archive/zip",
 	"bufio",
