@@ -1,10 +1,10 @@
 package main
 
 import (
-	"strings"
-	"path/filepath"
 	"os"
+	"path/filepath"
 	"runtime"
+	"strings"
 )
 
 // Package represents package info, needed for this tool.
@@ -25,6 +25,7 @@ func init() {
 	// Try to load list of std packages from goroot
 	getStdPkgs()
 }
+
 // IsInternal returns true if subpkg is a subpackage of
 // pkg.
 func IsInternal(pkg, subpkg string) bool {
@@ -52,8 +53,6 @@ func IsInternal(pkg, subpkg string) bool {
 }
 
 // IsStdlib attempts to check if package belongs to stdlib.
-// FIXME: there is probably more idiomatic way to do this,
-// I just need to find it.
 func IsStdlib(path string) bool {
 	for _, p := range stdPkgs {
 		if p == path {
