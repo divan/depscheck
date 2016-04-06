@@ -69,7 +69,7 @@ func IsStdlib(path string) bool {
 // Based on go/cmd function matchPackages (https://golang.org/src/cmd/go/main.go#L553)
 // and listStdPkgs function from https://golang.org/src/go/build/deps_test.go#L420
 //
-// List of stdlib packages sets to stdPkgsDedault if something went wrong
+// List of stdlib packages sets to stdPkgsDefault if something went wrong
 func getStdPkgs() {
 	goroot := runtime.GOROOT()
 
@@ -93,13 +93,13 @@ func getStdPkgs() {
 		return nil
 	}
 	if err := filepath.Walk(src, walkFn); err != nil {
-		stdPkgs = stdPkgsDedault
+		stdPkgs = stdPkgsDefault
 	}
 }
 
 var stdPkgs []string
 
-var stdPkgsDedault = []string{
+var stdPkgsDefault = []string{
 	"archive/tar",
 	"archive/zip",
 	"bufio",
