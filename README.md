@@ -1,17 +1,20 @@
 # DepsCheck
 
+[![Build Status](https://img.shields.io/travis/divan/depscheck.svg)](https://travis-ci.org/divan/depscheck)
 [![Go Report Card](https://goreportcard.com/badge/github.com/divan/depscheck)](https://goreportcard.com/report/github.com/divan/depscheck)
+[![Downloads](https://img.shields.io/github/downloads/divan/depscheck/latest/total.svg)](https://github.com/divan/depscheck/releases)
+[![Latest release](https://img.shields.io/github/release/divan/depscheck.svg)](https://github.com/divan/depscheck/releases)
 
 Dependency checker for Golang (Go) packages. Prints stats and suggests to remove small LeftPad-like imports if any.
 
 ## Introduction
 
-DepsCheck analyzes source code of your package and all its imports and attempts to find good candidates to be removed as a depdendency. It only suggests to pay attention to those dependencies, nothing more.
+DepsCheck analyzes source code of your package and all its imports and attempts to find good candidates to be removed as a dependency. It only suggests to pay attention to those dependencies, nothing more.
 It also can shows detailed statistics for imported packages usage, including external functions, methods, variables and types used in your project. For functions and methods it calculates LOC (Lines Of Code), Cumulative LOC (sum of nested functions), number of calls, nesting depth and so on.
 
 <img src="./demo/depscheck.png" alt="DepsCheck demo" width="800">
 
-This tool was inspired by famous [LeftPad incident](http://blog.npmjs.org/post/141577284765/kik-left-pad-and-npm) in NPM/Javascript community. Although Go community do not tend to create packages for every single function over there, the goal is to let programs guide us and help people to learn better practicies.
+This tool was inspired by famous [LeftPad incident](http://blog.npmjs.org/post/141577284765/kik-left-pad-and-npm) in NPM/Javascript community. Although Go community do not tend to create packages for every single function over there, the goal is to let programs guide us and help people to learn better practices.
 
 Also some inspiration came from one of the [Go Proverbs](http://go-proverbs.github.io):
 
@@ -19,17 +22,21 @@ Also some inspiration came from one of the [Go Proverbs](http://go-proverbs.gith
 
 If you struggle to understand how it applies with DRY and why it's wise point, I suggest you to check out [this video](https://www.youtube.com/watch?v=PAAkCSZUG1c) on a subject.
 
-# Installation
+## Installation
 
 Just run go get:
 
+```bash
     go get github.com/divan/depscheck
+```
 
 To update:
 
+```bash
     go get -u github.com/divan/depscheck
-    
-# Usage
+```
+
+## Usage
 
 The usage is straightforward - just pass the package path (*github.com/user/package*) you want to check. Path can be also the dot (.) - in this case depscheck will check package in current directory. Also, you may pass one or many *.go files:
 
@@ -60,9 +67,9 @@ Sometimes you want only totals statistics - how many packages, calls and LOC in 
     
 Don't forget `-help` flag for detailed usage information.
 
-# Sample Output
+## Sample Output
 
-```
+```bash
 $ depscheck -v github.com/divan/expvarmon
 github.com/divan/expvarmon: 4 packages, 1022 LOC, 93 calls, 11 depth, 23 depth int.
 +--------+---------+---------------------+-----------+-------+-----+--------+-------+----------+
@@ -123,8 +130,9 @@ github.com/divan/expvarmon: 4 packages, 1022 LOC, 93 calls, 11 depth, 23 depth i
 ```
 
 You can see that depscheck suggested to take a look into two packages - `byten` and `ranges`. It makes sense and I'm going to follow its advice. Those packages are really small and only one small function is used from both of them.
-   
-# Notes
+
+## Notes
+
 - Suggestions made by this tool are totally optional and could be totally false alarms. The language used is "package X is a good candidate to be remove" to bring your attention to inspect this package and decide.
 - Terms 'Depth' and 'DepthInternal' in statistics mean a number of external/internal dependencies (functions/methods/vars). Function with one level of external nested calls that contain 3 of them will have Depth equal 3. If 'depth' sounds strange, I'd be glad to hear suggestions on better naming. Also, actual func depth is easy to calculate.
 - This tool is beta and may report incorrect info and contain bugs. Don't rely a lot on its results without double checking.
@@ -132,6 +140,6 @@ You can see that depscheck suggested to take a look into two packages - `byten` 
 - If you're encountered a situation where tools is reporting incorrectly or panics - feel free to open an issue or (better) create Pull Request.
 - This tool require Go 1.6+
 
-# License
+## License
 
 MIT License
